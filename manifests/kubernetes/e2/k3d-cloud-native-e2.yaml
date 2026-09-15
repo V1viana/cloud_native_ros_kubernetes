@@ -1,0 +1,28 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+
+metadata:
+  name: cloud-native-e2
+
+servers: 1
+agents: 0
+
+kubeAPI:
+  hostIP: "127.0.0.1"
+  hostPort: "6552"
+
+options:
+  k3d:
+    wait: true
+    timeout: "180s"
+  k3s:
+    extraArgs:
+      - arg: "--disable=traefik"
+        nodeFilters: ["server:*"]
+      - arg: "--disable=servicelb"
+        nodeFilters: ["server:*"]
+    nodeLabels:
+      - label: kuberos.io/role=onboard
+        nodeFilters: ["server:0"]
+      - label: robot.kuberos.io/name=drone01
+        nodeFilters: ["server:0"]

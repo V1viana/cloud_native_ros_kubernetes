@@ -1,0 +1,199 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: e1-event-detector-config
+  namespace: cloud-native-p2
+data:
+  e1_battery.yaml: |
+    event_detector:
+      ros__parameters:
+        startup_state: 3
+        buffer:
+          default_time: 10.0
+          default_queue_size: 50
+          use_msg_stamp: true
+        analysis:
+          default_period: 0.1
+        rules:
+          - px4_event_detector_plugin::BatteryLowRule
+        rule_params:
+          px4_event_detector_plugin::BatteryLowRule:
+            enabled: true
+            period: 0.1
+            parameters:
+              robot_id: drone01
+              battery_topic: /e1/fault/battery_status
+              command_topic: /fmu/in/vehicle_command
+              ack_topic: /fmu/out/vehicle_command_ack_v1
+              vehicle_status_topic: /fmu/out/vehicle_status_v4
+              event_topic: /fleet/operational_events
+              threshold: 0.20
+              reset_threshold: 0.25
+              consecutive_samples: 3
+              max_message_age_sec: 2.0
+              max_attempts: 3
+              retry_timeout_sec: 2.0
+              target_system: 1
+              target_component: 1
+              source_system: 1
+              source_component: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e1-battery-event-detector
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: e1-battery-event-detector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: e1-battery-event-detector
+    spec:
+      nodeSelector:
+        kuberos.io/role: onboard
+      containers:
+        - name: detector
+          image: cloud-native-ros/event-detector:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              exec ros2 launch event_detector event_detector.launch.py \
+                params:=/etc/event-detector/e1_battery.yaml \
+                log_level:=info
+          env:
+            - name: ROS_DOMAIN_ID
+              value: "230"
+            - name: RMW_IMPLEMENTATION
+              value: rmw_fastrtps_cpp
+            - name: ROS_DISCOVERY_SERVER
+              value: __P2_DISCOVERY_ADDRESS__:11811
+          volumeMounts:
+            - name: detector-config
+              mountPath: /etc/event-detector
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          startupProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -lc
+                - |
+                  source /ws/install/setup.bash
+                  ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /event_detector |
+                    grep -q active
+            periodSeconds: 4
+            timeoutSeconds: 5
+            failureThreshold: 20
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 3
+      volumes:
+        - name: detector-config
+          configMap:
+            name: e1-event-detector-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-microxrce-agent
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: drone01-microxrce-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: drone01-microxrce-agent
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kuberos.io/role: onboard
+      containers:
+        - name: agent
+          image: microros/micro-ros-agent:humble
+          imagePullPolicy: IfNotPresent
+          args: ["udp4", "--port", "8888"]
+          env:
+            - name: ROS_DOMAIN_ID
+              value: "230"
+            - name: RMW_IMPLEMENTATION
+              value: rmw_fastrtps_cpp
+            - name: ROS_DISCOVERY_SERVER
+              value: __P2_DISCOVERY_ADDRESS__:11811
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-px4-sitl
+  namespace: cloud-native-p2
+  labels:
+    cloud-native-robotics.io/criticality: flight-control
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: drone01-px4-sitl
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: drone01-px4-sitl
+        cloud-native-robotics.io/criticality: flight-control
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kuberos.io/role: onboard
+      containers:
+        - name: px4
+          image: px4io/px4-sitl:latest
+          imagePullPolicy: IfNotPresent
+          workingDir: /opt/px4
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              sed -i \
+                "s|uxrce_dds_client start -t udp|uxrce_dds_client start -t udp -h 127.0.0.1|" \
+                /opt/px4/etc/init.d-posix/rcS
+              exec /opt/px4/bin/px4 -d \
+                -s /opt/px4/etc/init.d-posix/rcS /opt/px4
+          env:
+            - name: PX4_SIM_MODEL
+              value: sihsim_quadx
+            - name: ROS_DOMAIN_ID
+              value: "230"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "kill -0 1"]
+            periodSeconds: 5

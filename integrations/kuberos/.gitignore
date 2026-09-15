@@ -1,0 +1,65 @@
+# Python
+
+*.log
+*.pot
+*.pyc
+**pycache**/
+.mypy_cache/
+
+# Virtual environments
+
+venv/
+.venv/
+env/
+
+# Local DB / runtime data
+
+/dev_db/
+dev_db/
+*.sqlite3
+db.sqlite3
+
+# KubeROS runtime/generated files
+
+kuberos/media/
+kuberos/tmp/
+tmp/
+
+# Credentials / certificates / secrets
+
+*.crt
+*.pem
+*.key
+*k3d-token.txt
+*k3d-ca.crt
+cluster_registration.yaml
+
+# Generated k3d configuration
+
+k8s/k3d-kuberos-generated.yaml
+k8s/*generated*.yaml
+
+# Generated KubeROS manifests
+
+kuberos_manifests/cluster/*generated*.yaml
+kuberos_manifests/fleet/*generated*.yaml
+kuberos_manifests/services/*generated*.yaml
+kuberos_manifests/deployments/px4_event_driven_drone*_api.yaml
+
+# Local-only / legacy folders
+
+backups/
+docs/archive/
+kuberos_manifests/no/
+kuberos_manifests/deployments/archived_unused/
+kuberos_manifests/deployments/scalable_backup/
+k8s/no/
+k8s/deployment/
+probe_v1/
+scripts/no/
+
+# OS / editor
+
+.DS_Store
+.vscode/
+.idea/

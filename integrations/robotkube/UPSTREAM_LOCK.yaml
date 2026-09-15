@@ -1,0 +1,27 @@
+schema_version: 1
+recorded_at: "2026-08-21"
+repositories:
+  event_detector:
+    path: integrations/robotkube/event_detector
+    remote: https://github.com/ika-rwth-aachen/event_detector.git
+    commit: 32f59d0c2ff1a8be4c48c96f10cee6f0edf6cdbf
+    branch_at_clone: main
+    checkout: detached
+    license: MIT
+    copyright: Institute for Automotive Engineering (ika), RWTH Aachen University
+  application_manager:
+    path: integrations/robotkube/application_manager
+    remote: https://github.com/ika-rwth-aachen/application_manager.git
+    commit: 8ddb99a70f7f4f571cbaaa0ccea19fb3432424e0
+    branch_at_clone: main
+    checkout: detached
+    license: MIT
+    copyright: Institute for Automotive Engineering (ika), RWTH Aachen University
+  perception_interfaces:
+    path: integrations/robotkube/perception_interfaces
+    remote: https://github.com/ika-rwth-aachen/perception_interfaces.git
+    commit: 1d1472f35f01ef2e575e75733c9bb2316099641c
+    branch_at_clone: main
+    checkout: detached
+    license: MIT
+    copyright: Institute for Automotive Engineering (ika), RWTH Aachen University

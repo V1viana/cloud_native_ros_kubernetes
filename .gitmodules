@@ -1,0 +1,12 @@
+[submodule "integrations/robotkube/event_detector"]
+	path = integrations/robotkube/event_detector
+	url = https://github.com/ika-rwth-aachen/event_detector.git
+[submodule "integrations/robotkube/application_manager"]
+	path = integrations/robotkube/application_manager
+	url = https://github.com/ika-rwth-aachen/application_manager.git
+[submodule "integrations/robotkube/perception_interfaces"]
+	path = integrations/robotkube/perception_interfaces
+	url = https://github.com/ika-rwth-aachen/perception_interfaces.git
+[submodule "integrations/px4_msgs"]
+	path = integrations/px4_msgs
+	url = https://github.com/PX4/px4_msgs.git

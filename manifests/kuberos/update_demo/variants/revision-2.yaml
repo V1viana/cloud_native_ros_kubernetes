@@ -1,0 +1,13 @@
+output: revision-2.yaml
+metadata:
+  appVersion: update-demo-r2-edge
+rosModules:
+  companion-analytics:
+    image: cloud-native-ros/companion-analytics:dev
+    preference: [edge]
+rosParamMap:
+  companion-analytics-config-drone01:
+    data:
+      processing_mode: edge
+      processing_delay_ms: "80"
+      latency_slo_ms: "150"

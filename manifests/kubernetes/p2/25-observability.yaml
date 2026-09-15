@@ -1,0 +1,204 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: p2-audit-data
+  namespace: cloud-native-p2
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: p2-manager-outbox
+  namespace: cloud-native-p2
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: p2-audit-writer
+  namespace: cloud-native-p2
+spec:
+  selector:
+    app.kubernetes.io/name: p2-audit-writer
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: p2-audit-writer
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: p2-audit-writer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: p2-audit-writer
+    spec:
+      serviceAccountName: p2-audit-writer
+      nodeSelector:
+        kuberos.io/role: control_plane
+      containers:
+        - name: audit-writer
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - source /ws/install/setup.bash && exec ros2 run platform_observability audit_writer
+          env:
+            - name: AUDIT_PATH
+              value: /data/audit.jsonl
+            - name: PORT
+              value: "8080"
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: audit-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+      volumes:
+        - name: audit-data
+          persistentVolumeClaim:
+            claimName: p2-audit-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: p2-operator-notifier
+  namespace: cloud-native-p2
+spec:
+  selector:
+    app.kubernetes.io/name: p2-operator-notifier
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: p2-operator-notifier
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: p2-operator-notifier
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: p2-operator-notifier
+    spec:
+      serviceAccountName: p2-operator-notifier
+      nodeSelector:
+        kuberos.io/role: control_plane
+      containers:
+        - name: notifier
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - source /ws/install/setup.bash && exec ros2 run platform_observability operator_notifier
+          env:
+            - name: AUDIT_URL
+              value: http://p2-audit-writer:8080/records
+            - name: PORT
+              value: "8081"
+          ports:
+            - name: http
+              containerPort: 8081
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 96Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: p2-platform-observer
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: p2-platform-observer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: p2-platform-observer
+    spec:
+      serviceAccountName: p2-platform-observer
+      nodeSelector:
+        kuberos.io/role: control_plane
+      containers:
+        - name: observer
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - source /ws/install/setup.bash && exec ros2 run platform_observability platform_observer
+          env:
+            - name: KUBERNETES_NAMESPACE
+              value: cloud-native-p2
+            - name: AUDIT_URL
+              value: http://p2-audit-writer:8080/records
+            - name: POLL_INTERVAL_SEC
+              value: "5"
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 96Mi
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 10

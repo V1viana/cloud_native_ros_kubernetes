@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e1-battery-fault-harness
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: e1-battery-fault-harness
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: e1-battery-fault-harness
+    spec:
+      nodeSelector:
+        kuberos.io/role: onboard
+      containers:
+        - name: harness
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              exec ros2 run e1_battery_fault_harness battery_fault_harness --ros-args \
+                -p startup_delay_sec:=__E1_FAULT_START_DELAY_SEC__ \
+                -p low_duration_sec:=8.0 \
+                -p recovery_duration_sec:=4.0 \
+                -p publish_frequency_hz:=10.0
+          env:
+            - name: ROS_DOMAIN_ID
+              value: "230"
+            - name: RMW_IMPLEMENTATION
+              value: rmw_fastrtps_cpp
+            - name: ROS_DISCOVERY_SERVER
+              value: __P2_DISCOVERY_ADDRESS__:11811
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 192Mi
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 2

@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-px4-sitl
+  namespace: cloud-native-e2
+  labels:
+    app.kubernetes.io/name: drone01-px4-sitl
+    app.kubernetes.io/managed-by: kuberos-e2
+    cloud-native-robotics.io/robot-id: drone01
+    cloud-native-robotics.io/criticality: flight-control
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: drone01-px4-sitl
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: drone01-px4-sitl
+        app.kubernetes.io/managed-by: kuberos-e2
+        cloud-native-robotics.io/robot-id: drone01
+        cloud-native-robotics.io/criticality: flight-control
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: px4-sitl
+        image: px4io/px4-sitl:latest
+        imagePullPolicy: IfNotPresent
+        workingDir: /opt/px4
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -eu
+          agent_ip=127.0.0.1
+          sed -i \
+            "s|uxrce_dds_client start -t udp|uxrce_dds_client start -t udp -h $agent_ip|" \
+            /opt/px4/etc/init.d-posix/rcS
+          echo "Starting PX4 SITL with XRCE Agent $agent_ip:8888"
+          exec /opt/px4/bin/px4 -d \
+            -s /opt/px4/etc/init.d-posix/rcS /opt/px4
+        env:
+        - name: PX4_SIM_MODEL
+          value: sihsim_quadx
+        - name: ROS_DOMAIN_ID
+          value: "229"
+        - name: PX4_UXRCE_DDS_PORT
+          value: "8888"
+        resources:
+          requests:
+            cpu: 250m
+            memory: 128Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+        startupProbe:
+          exec:
+            command: ["/bin/sh", "-c", "kill -0 1"]
+          periodSeconds: 2
+          failureThreshold: 30
+        readinessProbe:
+          exec:
+            command: ["/bin/sh", "-c", "kill -0 1"]
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command: ["/bin/sh", "-c", "kill -0 1"]
+          periodSeconds: 10

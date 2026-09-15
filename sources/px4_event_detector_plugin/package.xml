@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>px4_event_detector_plugin</name>
+  <version>0.1.0</version>
+  <description>PX4 operational-event rules for the upstream ROS 2 Event Detector.</description>
+
+  <maintainer email="research@cloud-native-robotics.local">Cloud Native ROS Kubernetes Project</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>cloud_native_robotics_interfaces</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>event_detector</depend>
+  <depend>pluginlib</depend>
+  <depend>px4_msgs</depend>
+  <depend>rclcpp</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

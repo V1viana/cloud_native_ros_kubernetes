@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: application-manager-p2
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: application-manager-p2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: application-manager-p2
+    spec:
+      serviceAccountName: cloud-native-application-manager
+      nodeSelector:
+        kuberos.io/role: control_plane
+      containers:
+        - name: manager
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              exec ros2 run cloud_native_application_manager application_manager --ros-args \
+                -p kuberos_base_url:=http://kuberos-api:8000 \
+                -p analytics_manifest_path:=/etc/p2/analytics-edge.yaml \
+                -p kubernetes_namespace:=cloud-native-p2 \
+                -p default_timeout_sec:=__P2_GOAL_TIMEOUT_SEC__ \
+                -p poll_interval_sec:=0.5 \
+                -p audit_url:=http://p2-audit-writer:8080/records \
+                -p notifier_url:=http://p2-operator-notifier:8081/notifications \
+                -p report_spool_path:=/var/lib/cloud-native-manager/outbox.sqlite3
+          env: &ros-env
+            - name: KUBEROS_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kuberos-api-token
+                  key: token
+            - name: ROS_DOMAIN_ID
+              value: "230"
+            - name: RMW_IMPLEMENTATION
+              value: rmw_fastrtps_cpp
+            - name: ROS_DISCOVERY_SERVER
+              value: __P2_DISCOVERY_ADDRESS__:11811
+          volumeMounts:
+            - name: manifest
+              mountPath: /etc/p2
+              readOnly: true
+            - name: manager-outbox
+              mountPath: /var/lib/cloud-native-manager
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 10
+      volumes:
+        - name: manifest
+          configMap:
+            name: p2-analytics-edge-manifest
+        - name: manager-outbox
+          persistentVolumeClaim:
+            claimName: p2-manager-outbox
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: operational-event-dispatcher-p2
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: operational-event-dispatcher-p2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: operational-event-dispatcher-p2
+    spec:
+      nodeSelector:
+        kuberos.io/role: control_plane
+      containers:
+        - name: dispatcher
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              exec ros2 run operational_event_dispatcher operational_event_dispatcher --ros-args \
+                -p server_timeout_sec:=10.0 \
+                -p goal_timeout_sec:=__P2_GOAL_TIMEOUT_SEC__
+          env:
+            - name: ROS_DOMAIN_ID
+              value: "230"
+            - name: RMW_IMPLEMENTATION
+              value: rmw_fastrtps_cpp
+            - name: ROS_DISCOVERY_SERVER
+              value: __P2_DISCOVERY_ADDRESS__:11811
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 10

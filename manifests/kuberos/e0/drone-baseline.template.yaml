@@ -1,0 +1,250 @@
+apiVersion: v1
+kind: ApplicationDeployment
+
+metadata:
+  name: e0-baseline-__ROBOT_ID__
+  rosVersion: humble
+  rmwImplementation: fastdds
+  appVersion: e0-three-drone-v1
+  targetFleet: uav-sim-fleet
+  targetRobots: [__ROBOT_ID__]
+  edgeResourceGroup: [public]
+  discoveryServer:
+    create: false
+    serviceName: p2-fastdds-discovery
+    address: __DISCOVERY_ADDRESS__
+    port: 11811
+
+rosModules:
+  - name: microxrce-agent
+    workloadKind: Deployment
+    replicas: 1
+    image: microros/micro-ros-agent:humble
+    imagePullPolicy: IfNotPresent
+    sourceWs: /uros_ws/install/
+    rosParameters:
+      - name: runtime
+        type: key-value
+        valueFrom: runtime-__ROBOT_ID__
+    entrypoint:
+      - |-
+        exec /uros_ws/install/micro_ros_agent/lib/micro_ros_agent/micro_ros_agent udp4 --port 8888
+    service:
+      enabled: true
+      name: __ROBOT_ID__-xrce-agent
+      type: ClusterIP
+      ports:
+        - name: xrce-dds
+          port: 8888
+          targetPort: 8888
+          protocol: UDP
+    readinessProbe:
+      exec:
+        command: ["/bin/bash", "-c", "kill -0 1"]
+      periodSeconds: 3
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    preference: [onboard]
+    requirements:
+      dynamicRescheduling: false
+      privileged: false
+
+  - name: px4-sitl
+    workloadKind: Deployment
+    replicas: 1
+    sourceRosSetup: false
+    sourceWs: null
+    image: px4io/px4-sitl:latest
+    imagePullPolicy: IfNotPresent
+    rosParameters:
+      - name: runtime
+        type: key-value
+        valueFrom: runtime-__ROBOT_ID__
+    entrypoint:
+      - |-
+        set -eu
+        agent_ip="${__AGENT_SERVICE_ENV__:-}"
+        if [ -z "$agent_ip" ]; then
+          echo "XRCE Agent Service is unavailable"
+          exit 1
+        fi
+        agent_ip_int=$(awk -F. -v ip="$agent_ip" 'BEGIN {
+          split(ip,a,".");
+          printf "%u", a[1]*16777216 + a[2]*65536 + a[3]*256 + a[4]
+        }')
+        cd /opt/px4
+        export PATH=/opt/px4/bin:$PATH
+        export PX4_SIM_MODEL=sihsim_quadx
+        export PX4_UXRCE_DDS_NS=__ROBOT_ID__
+        export PX4_HOME_LAT=__HOME_LAT__
+        export PX4_HOME_LON=__HOME_LON__
+        export PX4_HOME_ALT=488.0
+        export PX4_PARAM_UXRCE_DDS_AG_IP="$agent_ip_int"
+        export PX4_PARAM_UXRCE_DDS_PRT=8888
+        sed -i "s/param set-default UXRCE_DDS_AG_IP .*/param set-default UXRCE_DDS_AG_IP $agent_ip_int # $agent_ip/" /opt/px4/etc/init.d-posix/rcS
+        exec /opt/px4/bin/px4 -d -s /opt/px4/etc/init.d-posix/rcS /opt/px4
+    readinessProbe:
+      exec:
+        command: ["/bin/bash", "-c", "kill -0 1"]
+      periodSeconds: 5
+    resources:
+      requests:
+        cpu: 200m
+        memory: 128Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+    preference: [onboard]
+    requirements:
+      dynamicRescheduling: false
+      privileged: true
+
+  - name: event-detector
+    workloadKind: Deployment
+    replicas: 1
+    image: cloud-native-ros/event-detector:p2
+    imagePullPolicy: IfNotPresent
+    sourceWs: /ws/install/
+    rosParameters:
+      - name: runtime
+        type: key-value
+        valueFrom: runtime-__ROBOT_ID__
+      - name: detector-config
+        type: yaml
+        mountPath: /etc/event-detector
+        valueFrom: event-detector-__ROBOT_ID__.yaml
+    entrypoint:
+      - |-
+        exec ros2 launch event_detector event_detector.launch.py name:=event_detector namespace:=/__ROBOT_ID__ params:=/etc/event-detector/event-detector-__ROBOT_ID__.yaml log_level:=info
+    startupProbe:
+      exec:
+        command:
+          - /bin/bash
+          - -lc
+          - |-
+            source /ws/install/setup.bash
+            ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /__ROBOT_ID__/event_detector | grep -q active
+      periodSeconds: 4
+      timeoutSeconds: 5
+      failureThreshold: 30
+    readinessProbe:
+      exec:
+        command: ["/bin/bash", "-c", "kill -0 1"]
+      periodSeconds: 3
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+    preference: [onboard]
+    requirements:
+      dynamicRescheduling: false
+      privileged: false
+
+  - name: companion-analytics-onboard
+    workloadKind: Deployment
+    replicas: 1
+    image: cloud-native-ros/control-plane:p2
+    imagePullPolicy: IfNotPresent
+    sourceWs: /ws/install/
+    rosParameters:
+      - name: runtime
+        type: key-value
+        valueFrom: runtime-__ROBOT_ID__
+    entrypoint:
+      - |-
+        ros2 run companion_analytics companion_analytics --ros-args -r __node:=companion_analytics_onboard -r __ns:=/__ROBOT_ID__ -p robot_id:=__ROBOT_ID__ -p instance_id:=onboard -p metrics_topic:=/__ROBOT_ID__/analytics/metrics -p health_service:=/__ROBOT_ID__/companion/onboard/health -p processing_delay_ms:=80.0 -p queue_depth:=4 -p cpu_percent:=25.0 -p sample_period_ms:=250 &
+        child=$!
+        trap 'kill -TERM "$child"; wait "$child"' TERM INT
+        lifecycle_node=/__ROBOT_ID__/companion_analytics_onboard
+        for attempt in $(seq 1 30); do
+          lifecycle_state=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get "$lifecycle_node" 2>/dev/null | tail -n 1 || true)
+          case "$lifecycle_state" in
+            *unconfigured*)
+              ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle set "$lifecycle_node" configure || true
+              ;;
+            *inactive*)
+              ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle set "$lifecycle_node" activate || true
+              ;;
+            *active*)
+              break
+              ;;
+          esac
+          sleep 1
+        done
+        lifecycle_state=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get "$lifecycle_node" 2>/dev/null | tail -n 1 || true)
+        if [[ "$lifecycle_state" != *active* ]]; then
+          echo "Failed to activate $lifecycle_node; last state: $lifecycle_state" >&2
+          kill -TERM "$child"
+          wait "$child" || true
+          exit 1
+        fi
+        wait "$child"
+    startupProbe:
+      exec:
+        command:
+          - /bin/bash
+          - -lc
+          - |-
+            source /ws/install/setup.bash
+            ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /__ROBOT_ID__/companion_analytics_onboard | grep -q active
+      periodSeconds: 3
+      timeoutSeconds: 5
+      failureThreshold: 30
+    readinessProbe:
+      exec:
+        command: ["/bin/bash", "-c", "kill -0 1"]
+      periodSeconds: 3
+    resources:
+      requests:
+        cpu: 75m
+        memory: 96Mi
+      limits:
+        cpu: 400m
+        memory: 256Mi
+    preference: [onboard]
+    requirements:
+      dynamicRescheduling: true
+      privileged: false
+
+rosParamMap:
+  - name: runtime-__ROBOT_ID__
+    type: key-value
+    data:
+      ROS_DOMAIN_ID: "230"
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      ROS_DISCOVERY_SERVER: "__DISCOVERY_ADDRESS__:11811"
+
+  - name: event-detector-__ROBOT_ID__.yaml
+    type: yaml
+    data: |
+      /__ROBOT_ID__/event_detector:
+        ros__parameters:
+          startup_state: 3
+          buffer:
+            default_time: 10.0
+            default_queue_size: 50
+            use_msg_stamp: true
+          analysis:
+            default_period: 0.2
+          rules:
+            - px4_event_detector_plugin::AnalyticsLatencySloRule
+          rule_params:
+            px4_event_detector_plugin::AnalyticsLatencySloRule:
+              enabled: true
+              period: 0.2
+              parameters:
+                robot_id: __ROBOT_ID__
+                metrics_topic: /__ROBOT_ID__/analytics/metrics
+                event_topic: /fleet/operational_events
+                violation_threshold_ms: 250.0
+                recovery_threshold_ms: 150.0
+                window_sec: 2.0
+                consecutive_windows: 3

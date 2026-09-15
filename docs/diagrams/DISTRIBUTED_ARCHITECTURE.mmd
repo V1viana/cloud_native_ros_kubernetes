@@ -1,0 +1,54 @@
+flowchart LR
+    subgraph CP[Control plane]
+        direction TB
+        FD[Fast DDS fleet discovery] --> DISP[Operational Event Dispatcher]
+        DISP -->|DeploymentRequest Action| AM[Application Manager]
+        AM -->|ROS-aware operations| KR[KubeROS API + worker]
+        AM -->|native remediation| KAPI[Kubernetes API]
+        KR -->|desired state| KAPI
+        AM --> OBS[Observer + audit + notifier]
+    end
+
+    subgraph EDGE[Shared edge compute]
+        direction TB
+        HPA[Kubernetes HPA] --> AE[Companion Analytics edge]
+    end
+
+    subgraph ROBOTS[Robot layer - independent onboard failure domains]
+        direction TB
+        subgraph O1[Onboard drone01]
+            direction LR
+            PX41[PX4 SITL] <-->|uXRCE-DDS| XRCE1[Micro XRCE-DDS Agent]
+            XRCE1 --> ED1[Event Detector + PX4 plugins]
+            XRCE1 --> AO1[Analytics onboard]
+            ED1 -->|local RTL| PX41
+        end
+        subgraph O2[Onboard drone02]
+            direction LR
+            PX42[PX4 SITL] <-->|uXRCE-DDS| XRCE2[Micro XRCE-DDS Agent]
+            XRCE2 --> ED2[Event Detector + PX4 plugins]
+            XRCE2 --> AO2[Analytics onboard]
+        end
+        subgraph O3[Onboard drone03]
+            direction LR
+            PX43[PX4 SITL] <-->|uXRCE-DDS| XRCE3[Micro XRCE-DDS Agent]
+            XRCE3 --> ED3[Event Detector + PX4 plugins]
+            XRCE3 --> AO3[Analytics onboard]
+        end
+    end
+
+    O1 -->|OperationalEvent / DDS| FD
+    O2 -->|OperationalEvent / DDS| FD
+    O3 -->|OperationalEvent / DDS| FD
+    KAPI -.->|placement + reconciliation| EDGE
+    KAPI -.->|reconciliation| O1
+    KAPI -.->|reconciliation| O2
+    KAPI -.->|reconciliation| O3
+    EDGE -->|metrics + health| FD
+
+    classDef onboard fill:#E8F4F3,stroke:#0B7F7A,color:#17323D,stroke-width:1.5px;
+    classDef edge fill:#FFF1E8,stroke:#D96B3B,color:#17323D,stroke-width:1.5px;
+    classDef control fill:#E9EEF4,stroke:#284B63,color:#17323D,stroke-width:1.5px;
+    class PX41,XRCE1,ED1,AO1,PX42,XRCE2,ED2,AO2,PX43,XRCE3,ED3,AO3 onboard;
+    class AE,HPA edge;
+    class FD,DISP,AM,KR,KAPI,OBS control;

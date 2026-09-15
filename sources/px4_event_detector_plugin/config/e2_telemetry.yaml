@@ -1,0 +1,25 @@
+event_detector:
+  ros__parameters:
+    startup_state: 3
+    buffer:
+      default_time: 10.0
+      default_queue_size: 20
+      use_msg_stamp: true
+    analysis:
+      default_period: 0.2
+    rules:
+      - px4_event_detector_plugin::TelemetryHeartbeatRule
+    rule_params:
+      px4_event_detector_plugin::TelemetryHeartbeatRule:
+        enabled: true
+        period: 0.2
+        parameters:
+          robot_id: drone01
+          vehicle_status_topic: /fmu/out/vehicle_status_v4
+          event_topic: /fleet/operational_events
+          startup_grace_sec: 2.0
+          timeout_sec: 3.0
+          recovery_samples: 3
+          recovery_window_sec: 2.0
+          recovery_stability_sec: 3.0
+          cooldown_sec: 5.0

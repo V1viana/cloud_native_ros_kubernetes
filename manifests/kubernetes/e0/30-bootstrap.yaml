@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: analytics-routing-drone02
+  namespace: cloud-native-p2
+data:
+  active_instance: onboard
+  correlation_id: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: analytics-routing-drone03
+  namespace: cloud-native-p2
+data:
+  active_instance: onboard
+  correlation_id: ""
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e0-kuberos-bootstrap
+  namespace: cloud-native-p2
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: e0-kuberos-bootstrap
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      nodeSelector:
+        kuberos.io/role: control_plane
+      containers:
+        - name: bootstrap
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |-
+              source /ws/install/setup.bash
+              exec ros2 run e0_kuberos_bootstrap e0_kuberos_bootstrap --manifest-dir /etc/e0/manifests --kuberos-url http://kuberos-api:8000 --timeout-sec 240
+          env:
+            - name: KUBEROS_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kuberos-api-token
+                  key: token
+          volumeMounts:
+            - name: manifests
+              mountPath: /etc/e0/manifests
+              readOnly: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 192Mi
+      volumes:
+        - name: manifests
+          configMap:
+            name: e0-kuberos-manifests

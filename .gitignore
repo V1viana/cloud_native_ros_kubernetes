@@ -1,0 +1,55 @@
+# ROS 2 / colcon generated artifacts
+/build/
+/install/
+/log/
+
+# Python generated artifacts
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local runtime state
+*.sqlite3
+db.sqlite3
+dev_db/
+tmp/
+integrations/kuberos/kuberos/cookies.txt
+
+# Credentials and cluster-local material
+*.crt
+*.pem
+*.key
+*k3d-token.txt
+cluster_registration.yaml
+
+# Generated KubeROS manifests
+integrations/kuberos/k8s/k3d-kuberos-generated.yaml
+integrations/kuberos/k8s/*generated*.yaml
+integrations/kuberos/kuberos_manifests/cluster/*generated*.yaml
+integrations/kuberos/kuberos_manifests/fleet/*generated*.yaml
+integrations/kuberos/kuberos_manifests/services/*generated*.yaml
+integrations/kuberos/kuberos_manifests/deployments/px4_event_driven_drone*_api.yaml
+/manifests/kuberos/update_demo/generated/
+
+# Generated runtime and campaign output
+/results/*
+!/results/README.md
+
+# Local binary documents
+*.pptx
+*.pdf
+
+# Preserved metadata from the original local KubeROS clone
+integrations/kuberos/.upstream-git/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store

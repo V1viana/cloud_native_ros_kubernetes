@@ -1,0 +1,7 @@
+operational_event_dispatcher:
+  ros__parameters:
+    event_topic: /fleet/operational_events
+    action_name: /fleet/deployment_request
+    server_timeout_sec: 5.0
+    goal_timeout_sec: 120.0
+    incident_cache_size: 256

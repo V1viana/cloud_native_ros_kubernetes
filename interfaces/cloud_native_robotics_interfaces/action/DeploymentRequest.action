@@ -1,0 +1,23 @@
+# Goal: request an outcome for one normalized operational incident.
+OperationalEvent event
+string policy_id
+string requested_outcome
+float32 timeout_sec
+---
+# Result: explicit terminal outcome, including rollback information.
+bool success
+string outcome
+string final_phase
+builtin_interfaces/Time finished_at
+bool rollback_performed
+diagnostic_msgs/KeyValue[] metrics
+---
+# Feedback: observable progress through the policy control loop.
+uint8 PHASE_ACCEPTED=0
+uint8 PHASE_ACTING=1
+uint8 PHASE_VERIFYING=2
+uint8 PHASE_ROLLING_BACK=3
+uint8 phase
+float32 progress
+string message
+diagnostic_msgs/KeyValue[] observations

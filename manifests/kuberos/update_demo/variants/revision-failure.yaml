@@ -1,0 +1,13 @@
+output: revision-failure.yaml
+metadata:
+  appVersion: update-demo-r3-invalid-image
+rosModules:
+  companion-analytics:
+    image: cloud-native-ros/companion-analytics:update-demo-image-does-not-exist
+    preference: [edge]
+rosParamMap:
+  companion-analytics-config-drone01:
+    data:
+      processing_mode: edge
+      processing_delay_ms: "80"
+      latency_slo_ms: "150"

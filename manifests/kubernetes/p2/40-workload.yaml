@@ -1,0 +1,290 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: p2-event-detector-config
+  namespace: cloud-native-p2
+data:
+  p2_analytics.yaml: |
+    event_detector:
+      ros__parameters:
+        startup_state: 3
+        buffer:
+          default_time: 10.0
+          default_queue_size: 50
+          use_msg_stamp: true
+        analysis:
+          default_period: 0.2
+        rules:
+          - px4_event_detector_plugin::AnalyticsLatencySloRule
+        rule_params:
+          px4_event_detector_plugin::AnalyticsLatencySloRule:
+            enabled: true
+            period: 0.2
+            parameters:
+              robot_id: drone01
+              metrics_topic: /drone01/analytics/metrics
+              event_topic: /fleet/operational_events
+              violation_threshold_ms: 250.0
+              recovery_threshold_ms: 150.0
+              window_sec: 2.0
+              consecutive_windows: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-companion-analytics-onboard
+  namespace: cloud-native-p2
+  labels:
+    cloud-native-robotics.io/criticality: non-critical
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: drone01-companion-analytics-onboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: drone01-companion-analytics-onboard
+    spec:
+      nodeSelector:
+        kuberos.io/role: onboard
+      containers:
+        - name: analytics
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              ros2 run companion_analytics companion_analytics --ros-args \
+                -r __node:=companion_analytics_onboard \
+                -r __ns:=/drone01 \
+                -p robot_id:=drone01 \
+                -p instance_id:=onboard \
+                -p metrics_topic:=/drone01/analytics/metrics \
+                -p health_service:=/drone01/companion/onboard/health \
+                -p processing_delay_ms:=__ONBOARD_PROCESSING_DELAY_MS__ \
+                -p queue_depth:=12 \
+                -p cpu_percent:=85.0 \
+                -p sample_period_ms:=250 &
+              child=$!
+              trap 'kill -TERM "$child"; wait "$child"' TERM INT
+              lifecycle_node=/drone01/companion_analytics_onboard
+              for attempt in $(seq 1 30); do
+                lifecycle_state=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
+                  ros2 lifecycle get "$lifecycle_node" 2>/dev/null | tail -n 1 || true)
+                case "$lifecycle_state" in
+                  *unconfigured*)
+                    ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
+                      ros2 lifecycle set "$lifecycle_node" configure || true
+                    ;;
+                  *inactive*)
+                    ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
+                      ros2 lifecycle set "$lifecycle_node" activate || true
+                    ;;
+                  *active*)
+                    break
+                    ;;
+                esac
+                sleep 1
+              done
+              lifecycle_state=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
+                ros2 lifecycle get "$lifecycle_node" 2>/dev/null | tail -n 1 || true)
+              if [[ "$lifecycle_state" != *active* ]]; then
+                echo "Failed to activate $lifecycle_node; last state: $lifecycle_state" >&2
+                kill -TERM "$child"
+                wait "$child" || true
+                exit 1
+              fi
+              wait "$child"
+          env:
+            - name: ROS_DOMAIN_ID
+              value: "230"
+            - name: RMW_IMPLEMENTATION
+              value: rmw_fastrtps_cpp
+            - name: ROS_DISCOVERY_SERVER
+              value: __P2_DISCOVERY_ADDRESS__:11811
+          resources:
+            requests:
+              cpu: 100m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -lc
+                - |
+                  source /ws/install/setup.bash
+                  ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get \
+                    /drone01/companion_analytics_onboard |
+                    grep -q active
+            periodSeconds: 3
+            timeoutSeconds: 5
+            failureThreshold: 20
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-event-detector-p2
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: analytics-event-detector-p2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: analytics-event-detector-p2
+    spec:
+      nodeSelector:
+        kuberos.io/role: onboard
+      containers:
+        - name: detector
+          image: cloud-native-ros/event-detector:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              exec ros2 launch event_detector event_detector.launch.py \
+                params:=/etc/event-detector/p2_analytics.yaml \
+                log_level:=info
+          env:
+            - name: ROS_DOMAIN_ID
+              value: "230"
+            - name: RMW_IMPLEMENTATION
+              value: rmw_fastrtps_cpp
+            - name: ROS_DISCOVERY_SERVER
+              value: __P2_DISCOVERY_ADDRESS__:11811
+          volumeMounts:
+            - name: detector-config
+              mountPath: /etc/event-detector
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          startupProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -lc
+                - |
+                  source /ws/install/setup.bash
+                  ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /event_detector |
+                    grep -q active
+            periodSeconds: 4
+            timeoutSeconds: 5
+            failureThreshold: 20
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 3
+      volumes:
+        - name: detector-config
+          configMap:
+            name: p2-event-detector-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-microxrce-agent
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: drone01-microxrce-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: drone01-microxrce-agent
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kuberos.io/role: onboard
+      containers:
+        - name: agent
+          image: microros/micro-ros-agent:humble
+          imagePullPolicy: IfNotPresent
+          args: ["udp4", "--port", "8888"]
+          env:
+            - name: ROS_DOMAIN_ID
+              value: "230"
+            - name: RMW_IMPLEMENTATION
+              value: rmw_fastrtps_cpp
+            - name: ROS_DISCOVERY_SERVER
+              value: __P2_DISCOVERY_ADDRESS__:11811
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-px4-sitl
+  namespace: cloud-native-p2
+  labels:
+    cloud-native-robotics.io/criticality: flight-control
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: drone01-px4-sitl
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: drone01-px4-sitl
+        cloud-native-robotics.io/criticality: flight-control
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kuberos.io/role: onboard
+      containers:
+        - name: px4
+          image: px4io/px4-sitl:latest
+          imagePullPolicy: IfNotPresent
+          workingDir: /opt/px4
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              sed -i \
+                "s|uxrce_dds_client start -t udp|uxrce_dds_client start -t udp -h 127.0.0.1|" \
+                /opt/px4/etc/init.d-posix/rcS
+              exec /opt/px4/bin/px4 -d \
+                -s /opt/px4/etc/init.d-posix/rcS /opt/px4
+          env:
+            - name: PX4_SIM_MODEL
+              value: sihsim_quadx
+            - name: ROS_DOMAIN_ID
+              value: "230"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "kill -0 1"]
+            periodSeconds: 5

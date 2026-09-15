@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "release": "project-093e686",
+  "repository": "docker.io/vivianacasale/cloud-native-ros-kubernetes",
+  "repository_commit": "093e686b28d5843a13523b6002cb3efd75cee986",
+  "images": [
+    {
+      "name": "control-plane",
+      "aliases": [
+        "cloud-native-ros/control-plane:p2",
+        "cloud-native-ros/control-plane:e2"
+      ],
+      "immutable_reference": "vivianacasale/cloud-native-ros-kubernetes@sha256:5586f51f5be34bddf2a019d48eafb59b6df12f48a204e8f5d6c8354a6ee9bd18"
+    },
+    {
+      "name": "event-detector",
+      "aliases": [
+        "cloud-native-ros/event-detector:p2",
+        "cloud-native-ros/event-detector:e2-upstream"
+      ],
+      "immutable_reference": "vivianacasale/cloud-native-ros-kubernetes@sha256:90fef04e0feb816b8b94a6726e2f5c3bc0194712cebf8a81f2a4c98d6ac27f55"
+    },
+    {
+      "name": "kuberos",
+      "aliases": [
+        "cloud-native-ros/kuberos:p2"
+      ],
+      "immutable_reference": "vivianacasale/cloud-native-ros-kubernetes@sha256:fc04411a21ef7ec1ee209aadc011db025778cb828cd6958843e897f9f7ac361a"
+    }
+  ]
+}

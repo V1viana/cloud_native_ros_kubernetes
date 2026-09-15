@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>e1_battery_fault_harness</name>
+  <version>0.1.0</version>
+  <description>Typed low-battery fault and local safety observer for E1.</description>
+  <maintainer email="research@cloud-native-robotics.local">Cloud Native ROS Kubernetes Project</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>px4_msgs</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

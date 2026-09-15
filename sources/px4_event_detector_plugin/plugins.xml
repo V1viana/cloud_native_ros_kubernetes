@@ -1,0 +1,20 @@
+<library path="px4_event_detector_plugin">
+  <class
+    name="px4_event_detector_plugin::BatteryLowRule"
+    type="px4_event_detector_plugin::BatteryLowRule"
+    base_class_type="event_detector::AnalysisRule">
+    <description>Detects sustained low battery and commands local PX4 RTL.</description>
+  </class>
+  <class
+    name="px4_event_detector_plugin::TelemetryHeartbeatRule"
+    type="px4_event_detector_plugin::TelemetryHeartbeatRule"
+    base_class_type="event_detector::AnalysisRule">
+    <description>Detects and clears loss of the PX4 VehicleStatus heartbeat.</description>
+  </class>
+  <class
+    name="px4_event_detector_plugin::AnalyticsLatencySloRule"
+    type="px4_event_detector_plugin::AnalyticsLatencySloRule"
+    base_class_type="event_detector::AnalysisRule">
+    <description>Detects sustained p95 latency SLO violations.</description>
+  </class>
+</library>

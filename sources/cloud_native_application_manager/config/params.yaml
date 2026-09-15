@@ -1,0 +1,17 @@
+application_manager:
+  ros__parameters:
+    action_name: /fleet/deployment_request
+    kuberos_base_url: http://kuberos-api:8000
+    kuberos_token_env: KUBEROS_API_TOKEN
+    analytics_manifest_path: ""
+    poll_interval_sec: 1.0
+    default_timeout_sec: 120.0
+    event_topic: /fleet/operational_events
+    kubernetes_namespace: ""
+    telemetry_deployment_name_pattern: "{robot_id}-microxrce-agent"
+    diagnostic_job_template_path: ""
+    audit_url: ""
+    notifier_url: ""
+    report_spool_path: ""
+    report_delivery_attempts: 20
+    report_retry_delay_sec: 0.5

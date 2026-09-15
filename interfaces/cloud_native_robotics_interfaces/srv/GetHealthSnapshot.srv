@@ -1,0 +1,13 @@
+string correlation_id
+---
+std_msgs/Header header
+string correlation_id
+bool healthy
+string robot_id
+string component
+string instance_id
+string lifecycle_state
+float64 latency_ms
+uint32 queue_depth
+float64 cpu_percent
+string detail
