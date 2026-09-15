@@ -106,13 +106,13 @@ repository API ha restituito `404`. R1 ha inoltre creato tramite KubeROS un
 Companion Analytics temporaneo dal digest control-plane, verificato
 `Ready`/imageID/placement onboard e infine eliminato lo stesso
 ApplicationDeployment tramite KubeROS. Le evidenze sono nel
-report R1 (output locale non versionato).
+[report R1](../results/evidence/runs/REGISTRY.md).
 
 Una successiva esecuzione E0 pulita ha consumato lo stesso lock nei runner:
 KubeROS, control plane, osservabilita', bootstrap, tre Event Detector e tre
 Companion Analytics sono stati avviati dai digest privati. Il gate runtime ha
 confrontato repository e SHA-256 di 16/16 container con gli `imageID` osservati.
-Il risultato e' nel report E0 digest (output locale non versionato)
+Il risultato e' nel [report E0 da registry](../results/evidence/runs/E0_REGISTRY.md)
 e nella relativa `image-provenance.csv` (output locale non versionato).
 
 Un tentativo preliminare ha rilevato la scadenza del token Knox sul cluster

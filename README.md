@@ -121,6 +121,7 @@ cloud_native_ros_kubernetes/
 - [Stato implementativo](docs/IMPLEMENTATION_STATUS.md)
 - [Gap analysis](docs/GAP_ANALYSIS.md)
 - [Campagna e scenari](docs/EXPERIMENT_CAMPAIGN.md)
+- [Risultati validati](results/README.md)
 - [Provenienza dei componenti](docs/THIRD_PARTY_PROVENANCE.md)
 - [Workflow immagini e registry](docs/IMAGE_REGISTRY.md)
 - [Diagramma Mermaid](docs/diagrams/DISTRIBUTED_ARCHITECTURE.mmd)

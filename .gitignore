@@ -41,6 +41,8 @@ integrations/kuberos/kuberos_manifests/deployments/px4_event_driven_drone*_api.y
 # Generated runtime and campaign output
 /results/*
 !/results/README.md
+!/results/evidence/
+!/results/evidence/**
 
 # Local binary documents
 *.pptx

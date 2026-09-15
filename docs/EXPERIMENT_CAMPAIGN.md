@@ -96,9 +96,9 @@ Il pass rate complessivo e' 48/50 (96%). E0 ed E2 sono 9/10; E1, P2 ed E4
 sono 10/10. E2 conserva mission success rate 10/10 e presenta recovery time
 medio di 32,460 s sui nove recovery riusciti. Il report validato, che mantiene
 traccia anche del campione escluso, e' in
-`risultato della campagna validata del 31 agosto 2026` (output locale non versionato).
+[`results/evidence/campaign/REPORT.md`](../results/evidence/campaign/REPORT.md).
 Commit, versioni e immagini sono in
-`reproducibility.json` (output locale non versionato).
+`reproducibility.json` (conservato negli output locali completi).
 
 Non e' necessario ripetere l'intera matrice: i nove E2 storici inclusi
 soddisfano retrospettivamente il medesimo gate dai rispettivi snapshot

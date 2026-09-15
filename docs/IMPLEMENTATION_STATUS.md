@@ -80,7 +80,7 @@ KubeROS integrata.
 | Manifest riproducibilita' U2 | PASS; commit, 4 submodule, toolchain e 6 riferimenti immagine fissati |
 
 La continuita' della missione armata e' documentata in
-`results/e2/20260831T135149Z/REPORT.md` (output locale non versionato).
+[`results/evidence/runs/E2.md`](../results/evidence/runs/E2.md).
 Durante l'hover PX4 e' rimasto armato in Hold e senza failsafe nei campioni
 prima, durante e dopo il fault. La quota e' variata di 0,158 m, il Pod PX4 ha
 conservato UID e restart `0/0`, mentre la policy P1 ha sostituito soltanto il
@@ -88,38 +88,38 @@ Pod Agent e ha concluso `telemetry_recovered (STABLE)` in 32,675 s. Il Job
 diagnostico ha conservato quattro snapshot JSON correlati.
 
 P2 e' documentata in
-`results/p2/20260830T220735Z/REPORT.md` (output locale non versionato).
+[`results/evidence/runs/P2.md`](../results/evidence/runs/P2.md).
 Il run usa nodi control-plane, onboard ed edge distinti, Fast DDS Discovery
 Server, ApplicationDeployment KubeROS, Lifecycle ROS 2, routing ConfigMap,
 HPA Kubernetes, Service health edge, audit su PVC, notifica e snapshot
 read-only della piattaforma.
 
 E0 nominale e' documentato in
-`results/e0/20260830T214257Z/REPORT.md` (output locale non versionato).
+[`results/evidence/runs/E0.md`](../results/evidence/runs/E0.md).
 Il cluster usa un nodo control plane, tre nodi onboard e un nodo edge. Tre
 richieste autenticate hanno creato tramite KubeROS PX4, Agent, Event Detector e
 Analytics per ogni drone; i tre namespace DDS sono rimasti nominali per 60 s e
 i tre Service onboard hanno restituito snapshot `healthy/active`.
 
 U1 definitivo e' documentato in
-`results/u1/20260901T194947Z/REPORT.md` (output locale non versionato).
+[`results/evidence/runs/U1.md`](../results/evidence/runs/U1.md).
 Il PATCH autenticato ha incrementato soltanto `e0-baseline-drone01` dalla
 revisione 1 alla 2 in 18 s. Il reconciler ha sostituito Companion Analytics
 senza sovrapporre nodi ROS con la stessa identita', preservando UID e restart
 count degli altri 11 Pod; il target e' ripartito con restart count zero.
 
 U2 e' documentato in
-`results/u2/20260901T194947Z/REPORT.md` (output locale non versionato).
+[`results/evidence/runs/U2.md`](../results/evidence/runs/U2.md).
 La revisione 3 con immagine inesistente e' stata marcata `UPDATE FAILED` e
 KubeROS ha ripristinato la revisione 2 in 109 s. I workload non target sono
 rimasti invariati 11/11 e il Service ROS finale e' `healthy/active` a 95 ms.
 
 E4 aggiornato e' documentato in
-`results/e4/20260830T221320Z/REPORT.md` (output locale non versionato):
+[`results/evidence/runs/E4.md`](../results/evidence/runs/E4.md):
 dopo il rollback il Service onboard ha confermato lo stato `healthy/active`.
 
 E1 e' documentata in
-`results/e1/20260830T081937Z/REPORT.md` (output locale non versionato).
+[`results/evidence/runs/E1.md`](../results/evidence/runs/E1.md).
 Il fault BatteryLow, il comando RTL, l'ack e lo stato `AUTO_RTL` sono avvenuti
 sul nodo onboard durante l'arresto del server k3d. Al ritorno del control
 plane, l'evento DDS conservato dal detector ha attivato la policy P0, che ha
@@ -127,7 +127,7 @@ prodotto audit e notifica senza azioni safety Kubernetes. Il reporter esegue
 ora retry limitati per indisponibilita' HTTP transitorie all'avvio.
 
 La chiusura dei gap di osservabilita' e' documentata in
-`results/observability/20260831T144812Z/REPORT.md` (output locale non versionato).
+[`results/evidence/runs/OBSERVABILITY.md`](../results/evidence/runs/OBSERVABILITY.md).
 Sei record sono rimasti nel PVC attraverso il cambio UID del manager e sono
 stati riprodotti FIFO senza duplicati; l'observer ha raccolto live PodMetrics
 per 19 Pod e 21 container.
