@@ -1,0 +1,27 @@
+# Variant B's U1: a differential update to the same ROSModule object
+# already created by manifests/kubernetes/e0/60-declarative-workload.yaml
+# (VARIANT=b baseline) -- same name/namespace, only rosParamMap.
+# processing_delay_ms changes, 80.0 -> 95.0, staying under the 250ms SLO
+# threshold on purpose (this must NOT trigger AdaptationController's
+# blue/green migration, it exercises ROSModuleController's own
+# update/rollback state machine instead). `kubectl apply` on the existing
+# name is the declarative equivalent of variant A's authenticated PATCH to
+# the KubeROS API: there is no separate "update" verb in this control
+# plane, editing the desired state and letting the controller reconcile it
+# is the update.
+apiVersion: dronekube.io/v1alpha1
+kind: ROSModule
+metadata:
+  name: companion-analytics-drone01
+  namespace: cloud-native-p2
+  labels: {app: companion-analytics, robot: drone01}
+spec:
+  robotId: drone01
+  package: companion_analytics
+  lifecycleTarget: Active
+  placement: onboard
+  rosParamMap:
+    processing_delay_ms: "95.0"
+    queue_depth: "4"
+    cpu_percent: "25.0"
+    sample_period_ms: "250"

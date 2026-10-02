@@ -1,0 +1,326 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: adaptationpolicies.dronekube.io
+spec:
+  group: dronekube.io
+  scope: Namespaced
+  names:
+    kind: AdaptationPolicy
+    plural: adaptationpolicies
+    singular: adaptationpolicy
+    shortNames: [adpol]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: State
+          type: string
+          jsonPath: .status.state
+        - name: Metric
+          type: string
+          jsonPath: .spec.trigger.metric
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [targetModuleSelector, trigger, action]
+              properties:
+                targetModuleSelector:
+                  type: object
+                  required: [matchLabels]
+                  properties:
+                    matchLabels:
+                      type: object
+                      additionalProperties:
+                        type: string
+                trigger:
+                  type: object
+                  required: [metric, threshold, consecutiveWindows, windowSec]
+                  properties:
+                    metric:
+                      type: string
+                    threshold:
+                      type: number
+                    consecutiveWindows:
+                      type: integer
+                      minimum: 1
+                    windowSec:
+                      type: number
+                action:
+                  type: object
+                  required: [type]
+                  # Type-specific requirements, checked at admission (CEL,
+                  # Kubernetes >= 1.29 GA; the clusters run k3s v1.31). They
+                  # used to be described as "enforced in the controller", but
+                  # the controller silently ignored a MigratePlacement without
+                  # to: edge and raised a KeyError on a RestartComponent
+                  # without a selector (docs/CRD_CONTRACT_AUDIT.md, D4).
+                  x-kubernetes-validations:
+                    - rule: "self.type != 'MigratePlacement' || has(self.to)"
+                      message: "MigratePlacement requires action.to (only 'edge' is implemented)"
+                    - rule: "self.type != 'RestartComponent' || (has(self.targetDeploymentSelector) && has(self.targetDeploymentSelector.matchLabels) && size(self.targetDeploymentSelector.matchLabels) > 0)"
+                      message: "RestartComponent requires a non-empty action.targetDeploymentSelector.matchLabels"
+                  properties:
+                    type:
+                      type: string
+                      # RestartComponent is P1-equivalent (telemetry loss):
+                      # rolls out the Deployment matched by
+                      # targetDeploymentSelector (a Pod-template annotation,
+                      # like `kubectl rollout restart`; deleting its Pods
+                      # directly was tried first and broke the Agent's
+                      # hostNetwork port, see adaptation_controller.py) and
+                      # creates a diagnostic Job. Unlike MigratePlacement
+                      # it does not target a ROSModule -- PX4/the uXRCE-DDS
+                      # Agent are plain Deployments (manifests/kubernetes/e0/
+                      # 40-shared-infra.yaml), not ROSModule-wrapped.
+                      enum: [MigratePlacement, RestartComponent]
+                    # Required for MigratePlacement (x-kubernetes-validations
+                    # above). Only edge: a migration back to onboard is not
+                    # implemented, and `onboard` used to be accepted here and
+                    # silently ignored by the controller (D4). Widening this
+                    # enum is a scope decision, not a schema fix.
+                    to:
+                      type: string
+                      enum: [edge]
+                    # Optional: rosParamMap entries the migrated instance
+                    # gets instead of inheriting the source module's
+                    # verbatim (e.g. a lower simulated processing_delay_ms
+                    # on edge). Absent -> full copy, same as before this
+                    # field existed. Mirrors ROSModule.spec.rosParamMap's
+                    # own open key-value shape rather than inventing a new
+                    # convention.
+                    edgeRosParamMap:
+                      type: object
+                      # String values only -- same reason as ROSModule.spec.
+                      # rosParamMap (operator/crds/rosmodule.yaml): an open
+                      # numeric field lets Kubernetes silently turn "80.0"
+                      # into the integer 80, which rclpy then rejects for a
+                      # DOUBLE-typed parameter.
+                      additionalProperties:
+                        type: string
+                      # R1, decision 2: same reserved keys as ROSModule.spec.rosParamMap,
+                      # or this policy would generate an edge ROSModule the API
+                      # server rejects.
+                      x-kubernetes-validations:
+                        - rule: "!('robot_id' in self) && !('instance_id' in self) && !('metrics_topic' in self) && !('health_topic' in self)"
+                          message: "edgeRosParamMap must not set platform-reserved parameters: robot_id, instance_id, metrics_topic, health_topic"
+                    # Required for RestartComponent (x-kubernetes-validations
+                    # above): which plain Deployment to roll out as the
+                    # remediation action. Same shape as targetModuleSelector above, but
+                    # deliberately a separate field -- it selects Kubernetes
+                    # Pods by their Deployment-applied labels, not ROSModules.
+                    targetDeploymentSelector:
+                      type: object
+                      properties:
+                        matchLabels:
+                          type: object
+                          additionalProperties:
+                            type: string
+                recovery:
+                  type: object
+                  properties:
+                    metric:
+                      type: string
+                    threshold:
+                      type: number
+                    consecutiveWindows:
+                      type: integer
+                      minimum: 1
+                rollback:
+                  type: object
+                  properties:
+                    # Preparation: the edge must become Active within this,
+                    # counted from the start of the migration; the onboard
+                    # still serves and is never touched.
+                    onReadinessFailureSec:
+                      type: number
+                      default: 60
+                    # R5 (review round of ccd491e): once the service has been
+                    # handed to the edge, a loss of its availability is
+                    # tolerated this long before the onboard is requested
+                    # back. 30s is the functional-test value, not a validated
+                    # availability requirement.
+                    edgeLossToleranceSec:
+                      type: number
+                      minimum: 0
+                      default: 30
+                    # The onboard must serve again within this after being
+                    # requested back; otherwise FallbackFailed.
+                    fallbackReadinessSec:
+                      type: number
+                      minimum: 0
+                      default: 60
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                  # Remediating/Escalated are RestartComponent's own pair,
+                  # parallel to Migrating/RolledBack rather than reusing
+                  # them: nothing is "rolled back" when a restart fails to
+                  # recover in time (nothing was created to undo), it is
+                  # escalated -- matching the imperative baseline's own
+                  # vocabulary for this exact outcome (E2/P1's dispatcher:
+                  # "telemetry_recovery_failed (ESCALATED)").
+                  # FallingBack: onboard requested back, edge kept until the
+                  # onboard serves; then RolledBack. FallbackFailed: the onboard
+                  # did not serve in time -- "fallback requested" is not
+                  # "fallback restored" (R5, review round of ccd491e).
+                  enum: [Nominal, Triggered, Migrating, Remediating, Recovered, RolledBack, Escalated,
+                         FallingBack, FallbackFailed]
+                  default: Nominal
+                lastTransitionTime:
+                  type: string
+                  format: date-time
+                observedGeneration:
+                  type: integer
+                consecutiveTriggerWindows:
+                  type: integer
+                  default: 0
+                consecutiveRecoveryWindows:
+                  type: integer
+                  default: 0
+                # Blue/green bookkeeping (added implementing the "onboard
+                # resta fallback disponibile" migration, S6.3): which edge
+                # ROSModule this policy created, and when the Migrating
+                # state was entered, so a stuck migration can be rolled
+                # back after spec.rollback.onReadinessFailureSec.
+                edgeModuleName:
+                  type: string
+                migratingSince:
+                  type: string
+                  format: date-time
+                # R5 fallback bookkeeping: when the onboard was deactivated
+                # (service handed to the edge), since when the edge has not
+                # been serving (removed when it serves again), when and why
+                # the onboard was requested back.
+                handedOverAt:
+                  type: string
+                  format: date-time
+                edgeUnavailableSince:
+                  type: string
+                  format: date-time
+                fallbackSince:
+                  type: string
+                  format: date-time
+                fallbackReason:
+                  type: string
+                  enum: [EdgeReadinessTimeout, EdgeModuleMissing, EdgeLost]
+                # A/B temporal contract (V6): the last tumbling window counted, by
+                # module and State Bridge instance, so each window is counted once
+                # (docs/CRD_CONTRACT_AUDIT.md).
+                windowCursor:
+                  type: object
+                  properties:
+                    module:
+                      type: string
+                    instance:
+                      type: string
+                    end:
+                      type: string
+                      format: date-time
+                # RestartComponent's own bookkeeping, parallel to
+                # edgeModuleName/migratingSince above but never mixed with
+                # them: diagnosticJobName is forensic evidence left behind
+                # on purpose (never deleted by the controller, unlike a
+                # stuck edge module on migration rollback), and
+                # remediatingModuleName remembers which onboard ROSModule's
+                # metric to watch for recovery -- RestartComponent creates
+                # no new module of its own to read a metric back from, the
+                # way MigratePlacement reads from the edge module it just
+                # created.
+                diagnosticJobName:
+                  type: string
+                restartedAt:
+                  type: string
+                  format: date-time
+                remediatingModuleName:
+                  type: string
+                # Stable identifier for one full incident (trigger through
+                # terminal state), reused as correlation_id/event_id on every
+                # audit.py record for it -- same purpose as the imperative
+                # baseline's own OperationalEvent.correlation_id, so both
+                # variants' audit.jsonl trails can be joined/compared.
+                correlationId:
+                  type: string
+                # Real-time gate for "N consecutive windows of windowSec":
+                # AdaptationController ticks faster than windowSec (see
+                # ADAPTATION_TICK_INTERVAL_SEC in fleet_operator/constants.py
+                # -- Kopf has no per-object dynamic timer interval), so a
+                # window is only counted once at least spec.trigger.
+                # windowSec has really elapsed since this timestamp, not on
+                # every tick.
+                lastWindowCheckedAt:
+                  type: string
+                  format: date-time
+                # R8: CPU/memory of the involved modules' current Pods from
+                # metrics-server at the last decision point (incident start or end).
+                # Evidence only: the trigger and recovery never read it.
+                decisionContext:
+                  type: object
+                  properties:
+                    phase:
+                      type: string
+                      enum: [IncidentStarted, IncidentCompleted]
+                    at:
+                      type: string
+                      format: date-time
+                    source:
+                      type: string
+                    available:
+                      type: boolean
+                    error:
+                      type: string
+                    cpuMillicoresTotal:
+                      type: number
+                    memoryBytesTotal:
+                      type: integer
+                    podsWithoutMetrics:
+                      type: array
+                      items:
+                        type: string
+                    pods:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          module:
+                            type: string
+                          pod:
+                            type: string
+                          cpuMillicores:
+                            type: number
+                          memoryBytes:
+                            type: integer
+                          timestamp:
+                            type: string
+                          window:
+                            type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

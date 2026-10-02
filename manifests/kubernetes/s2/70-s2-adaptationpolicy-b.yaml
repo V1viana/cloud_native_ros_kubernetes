@@ -1,0 +1,33 @@
+# Variant B's latency policy for S2 (R11, contract s2-partition-v1,
+# docs/R11_S2_PARTITION.md): E0 has no AdaptationPolicy, S2 needs one for
+# drone01 only. Trigger, recovery and action copied from P2
+# (manifests/kubernetes/p2/60-declarative-workload.yaml): p95 above 250 ms for 3
+# windows of 2 s, back below 150 ms for 3, MigratePlacement to the edge with the
+# nominal 80 ms there; onReadinessFailureSec 120, the value A's goal timeout is
+# rendered to in E0. From S4 only the robot selector
+# (manifests/kubernetes/s4/70-declarative-adaptationpolicies.yaml), none of its
+# faults or timeouts. Applied after the E0 bootstrap, before the reference.
+apiVersion: dronekube.io/v1alpha1
+kind: AdaptationPolicy
+metadata:
+  name: analytics-latency-slo-s2-drone01
+  namespace: cloud-native-p2
+spec:
+  targetModuleSelector:
+    matchLabels: {app: companion-analytics, robot: drone01}
+  trigger:
+    metric: latency_p95_ms
+    threshold: 250
+    consecutiveWindows: 3
+    windowSec: 2
+  action:
+    type: MigratePlacement
+    to: edge
+    edgeRosParamMap:
+      processing_delay_ms: "80.0"
+  recovery:
+    metric: latency_p95_ms
+    threshold: 150
+    consecutiveWindows: 3
+  rollback:
+    onReadinessFailureSec: 120

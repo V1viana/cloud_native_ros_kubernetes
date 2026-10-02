@@ -29,6 +29,33 @@
       ],
       "dockerfile": "containers/kuberos/Dockerfile",
       "context": "."
+    },
+    {
+      "name": "state-bridge",
+      "source_reference": "cloud-native-ros/state-bridge:p2",
+      "aliases": [
+        "cloud-native-ros/state-bridge:p2"
+      ],
+      "dockerfile": "containers/state-bridge/Dockerfile",
+      "context": "."
+    },
+    {
+      "name": "lifecycle-fault-probe",
+      "source_reference": "cloud-native-ros/lifecycle-fault-probe:p2",
+      "aliases": [
+        "cloud-native-ros/lifecycle-fault-probe:p2"
+      ],
+      "dockerfile": "containers/lifecycle-fault-probe/Dockerfile",
+      "context": "."
+    },
+    {
+      "name": "mission-observer",
+      "source_reference": "cloud-native-ros/mission-observer:p2",
+      "aliases": [
+        "cloud-native-ros/mission-observer:p2"
+      ],
+      "dockerfile": "containers/mission-observer/Dockerfile",
+      "context": "."
     }
   ]
 }

@@ -1,0 +1,67 @@
+# E4 for R9 (Viviana, 2026-09-26): the same fault as variant B's E4
+# (manifests/kubernetes/p2/60-declarative-workload-e4.yaml), a non-numeric
+# sample_period_ms that makes rclpy reject the parameter at startup, so the
+# edge node crash-loops and never becomes ready. Probes as in P2. The earlier
+# E4 fault, a readinessProbe that always fails
+# (analytics-edge-readiness-failure.yaml), is kept for the runs made with it.
+apiVersion: v1
+kind: ApplicationDeployment
+
+metadata:
+  name: analytics-edge-drone01
+  rosVersion: humble
+  rmwImplementation: fastdds
+  appVersion: e4-invalid-parameter
+  targetFleet: uav-sim-fleet
+  targetRobots: [drone01]
+  edgeResourceGroup: [public]
+  discoveryServer:
+    create: false
+    serviceName: p2-fastdds-discovery
+    address: __P2_DISCOVERY_ADDRESS__
+    port: 11811
+
+rosModules:
+  - name: companion-analytics
+    workloadKind: Deployment
+    replicas: 1
+    image: cloud-native-ros/control-plane:p2
+    imagePullPolicy: IfNotPresent
+    sourceWs: /ws/install/
+    entrypoint:
+      - |-
+        exec ros2 run companion_analytics companion_analytics --ros-args \
+          -r __node:=companion_analytics_edge \
+          -r __ns:=/drone01 \
+          -p robot_id:=drone01 \
+          -p instance_id:=edge \
+          -p metrics_topic:=/drone01/analytics/metrics \
+          -p health_service:=/drone01/companion/edge/health \
+          -p processing_delay_ms:=80.0 \
+          -p queue_depth:=2 \
+          -p cpu_percent:=35.0 \
+          -p sample_period_ms:=not-a-number
+    preference: [edge]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 96Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    startupProbe:
+      exec:
+        command: ["/bin/bash", "-c", "kill -0 1"]
+      periodSeconds: 2
+      failureThreshold: 30
+    readinessProbe:
+      exec:
+        command: ["/bin/bash", "-c", "kill -0 1"]
+      periodSeconds: 3
+    livenessProbe:
+      exec:
+        command: ["/bin/bash", "-c", "kill -0 1"]
+      periodSeconds: 10
+    requirements:
+      dynamicRescheduling: true
+      privileged: false

@@ -1,0 +1,25 @@
+# Variant B's U2: applied on top of U1's revision (processing_delay_ms=
+# 95.0), this is the "invalid update request" -- companion_analytics
+# declares processing_delay_ms as a ROS DOUBLE parameter, and rclpy raises
+# on construction when the override isn't parseable as one, crash-looping
+# the container (same failure mode already confirmed live for E4's
+# edgeRosParamMap fault). The Deployment can never reach Ready, so
+# ROSModuleController's timeout path (ROSMODULE_UPDATE_TIMEOUT_SEC, 60s)
+# rolls the Deployment back to status.lastGoodSpec (95.0) automatically --
+# no human, and no KubeROS-equivalent API call, involved.
+apiVersion: dronekube.io/v1alpha1
+kind: ROSModule
+metadata:
+  name: companion-analytics-drone01
+  namespace: cloud-native-p2
+  labels: {app: companion-analytics, robot: drone01}
+spec:
+  robotId: drone01
+  package: companion_analytics
+  lifecycleTarget: Active
+  placement: onboard
+  rosParamMap:
+    processing_delay_ms: "not-a-number"
+    queue_depth: "4"
+    cpu_percent: "25.0"
+    sample_period_ms: "250"

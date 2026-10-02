@@ -256,6 +256,21 @@ class RosModule():
                 },
                 'spec': {
                     'replicas': self.replicas,
+                    # Kubernetes' own default (600s, unset here before) marks
+                    # a Deployment's rollout "ProgressDeadlineExceeded" if its
+                    # Pod isn't Ready in time -- found live at S3's N=20 that
+                    # a startup probe's own restart-and-retry cycle (up to
+                    # ~400s under this host's CPU contention at that scale)
+                    # can occasionally exceed 600s even though the Pod comes
+                    # up healthy shortly after: Kubernetes marks the
+                    # Deployment permanently Failed regardless, and KubeROS's
+                    # own DeploymentJob model follows that verdict
+                    # (models/deployments.py's update_entire_deployment_status,
+                    # on job_phase == 'deploy_failed') even though nothing
+                    # was actually broken. Raised for headroom; harmless for
+                    # E0/P2/S4's own 3-robot fleets, which never approach 600s
+                    # to begin with.
+                    'progressDeadlineSeconds': 1200,
                     'selector': {
                         'matchLabels': {
                             'pod-name': self._name,

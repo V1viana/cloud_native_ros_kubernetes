@@ -1,0 +1,96 @@
+# Variant B's PX4 SITL + uXRCE Agent for E2, variant-agnostic infrastructure
+# (same reasoning as manifests/kubernetes/e0/40-shared-infra.yaml): plain
+# Deployments, not ROSModules -- PX4/the Agent stay outside the Fleet
+# Operator's scope by design (proposal: "invariati, riusati as-is"). Single
+# robot, single node here (unlike E0's three), so no per-robot nodeSelector
+# split is needed -- just the shared kuberos.io/role=onboard label.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-microxrce-agent
+  namespace: cloud-native-e2
+  # On the Deployment's own metadata, not just spec.template.metadata
+  # (pod-only) below: AdaptationPolicy.spec.action.targetDeploymentSelector
+  # (adaptation_controller.py's _restart_component()) lists Deployments by
+  # this label via the apps/v1 API, which matches against the Deployment
+  # object itself, never the pod template. Missing here, found live: every
+  # RestartComponent attempt raised "no Deployment matches selector" and
+  # crashed the whole reconcile tick before it could even persist
+  # status.state, silently discarding every accumulated trigger window.
+  labels: {app.kubernetes.io/name: drone01-microxrce-agent}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: drone01-microxrce-agent}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: drone01-microxrce-agent}}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {kuberos.io/role: onboard}
+      # Matches variant A's own Agent Deployment (manifests/kubernetes/e2/
+      # stack.yaml) -- default 30s would tax every RestartComponent rollout
+      # with up to 30s of otherwise-avoidable wait for the old Pod to
+      # actually go away, on top of whatever the real fault/recovery takes.
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: agent
+          image: microros/micro-ros-agent:humble
+          imagePullPolicy: IfNotPresent
+          args: ["udp4", "--port", "8888"]
+          env:
+            - {name: ROS_DOMAIN_ID, value: "229"}
+            - {name: RMW_IMPLEMENTATION, value: rmw_fastrtps_cpp}
+            - {name: ROS_DISCOVERY_SERVER, value: "__E2_DISCOVERY_ADDRESS__:11811"}
+          readinessProbe:
+            exec: {command: ["/bin/bash", "-c", "kill -0 1"]}
+            periodSeconds: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-px4-sitl
+  namespace: cloud-native-e2
+  labels: {app.kubernetes.io/name: drone01-px4-sitl, cloud-native-robotics.io/criticality: flight-control}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: drone01-px4-sitl}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: drone01-px4-sitl, cloud-native-robotics.io/criticality: flight-control}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {kuberos.io/role: onboard}
+      containers:
+        - name: px4
+          image: px4io/px4-sitl:latest
+          imagePullPolicy: IfNotPresent
+          workingDir: /opt/px4
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              sed -i "s|uxrce_dds_client start -t udp|uxrce_dds_client start -t udp -h 127.0.0.1|" \
+                /opt/px4/etc/init.d-posix/rcS
+              exec /opt/px4/bin/px4 -d -s /opt/px4/etc/init.d-posix/rcS /opt/px4
+          env:
+            - {name: PX4_SIM_MODEL, value: sihsim_quadx}
+            - {name: ROS_DOMAIN_ID, value: "229"}
+            # Variant A's own E2 topology (manifests/kubernetes/e2/
+            # px4-sitl.yaml) does NOT set this -- PX4 publishes
+            # un-namespaced (/fmu/out/...) there, matching the imperative
+            # rule's own default (telemetry_heartbeat_rule.cpp:
+            # vehicle_status_topic "/fmu/out/vehicle_status_v4"). Variant
+            # B's telemetry_topic() (k8s_workloads.py) instead follows
+            # E0/P2's multi-robot convention (/droneNN/fmu/out/...), so
+            # this manifest -- variant B's own, not variant A's -- sets
+            # the namespace explicitly to match what it expects.
+            - {name: PX4_UXRCE_DDS_NS, value: drone01}
+          resources:
+            requests: {cpu: 250m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          readinessProbe:
+            exec: {command: ["/bin/sh", "-c", "kill -0 1"]}
+            periodSeconds: 5

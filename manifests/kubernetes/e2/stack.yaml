@@ -194,7 +194,16 @@ spec:
             -p kubernetes_namespace:=cloud-native-e2 \
             -p diagnostic_job_template_path:=/etc/cloud-native/job.yaml \
             -p default_timeout_sec:=45.0 \
-            -p poll_interval_sec:=0.5
+            -p poll_interval_sec:=0.5 \
+            -p audit_url:=http://p2-audit-writer:8080/records \
+            -p notifier_url:=http://p2-operator-notifier:8081/notifications \
+            -p report_spool_path:=/var/lib/cloud-native-manager/outbox.sqlite3
+        # R9, decision D4b (Viviana, 2026-09-26): E2 reuses the project's
+        # Audit Writer and Operator Notifier (rendered from
+        # manifests/kubernetes/p2/25-observability.yaml by
+        # scripts/render_observability.py), with the same outbox as P2's
+        # Application Manager, so its incident records are delivered after
+        # the fact if the writer is briefly down (A's contract, EV23).
         env:
         - name: ROS_DOMAIN_ID
           value: "229"
@@ -231,6 +240,8 @@ spec:
         - name: fastdds
           mountPath: /etc/fastdds
           readOnly: true
+        - name: manager-outbox
+          mountPath: /var/lib/cloud-native-manager
       volumes:
       - name: diagnostics
         configMap:
@@ -238,6 +249,9 @@ spec:
       - name: fastdds
         configMap:
           name: e2-fastdds-udp
+      - name: manager-outbox
+        persistentVolumeClaim:
+          claimName: p2-manager-outbox
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -390,8 +404,9 @@ spec:
             - -lc
             - |
               source /ws/install/setup.bash
-              ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /event_detector |
-                grep -q active
+              raw=$(ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /event_detector 2>/dev/null) || exit 1
+              [ -n "$raw" ] || exit 1
+              [ "${raw%% *}" = "active" ]
           periodSeconds: 5
           timeoutSeconds: 5
           failureThreshold: 12
@@ -402,8 +417,9 @@ spec:
             - -lc
             - |
               source /ws/install/setup.bash
-              ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /event_detector |
-                grep -q active
+              raw=$(ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /event_detector 2>/dev/null) || exit 1
+              [ -n "$raw" ] || exit 1
+              [ "${raw%% *}" = "active" ]
           periodSeconds: 10
           timeoutSeconds: 5
         livenessProbe:

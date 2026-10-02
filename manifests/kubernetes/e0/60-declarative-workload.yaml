@@ -1,0 +1,60 @@
+# Variant B's three ROSModules for E0 -- one companion_analytics instance
+# per drone, all onboard, none migrating. No AdaptationPolicy: E0 is the
+# nominal baseline (no SLO violation is ever injected), matching how
+# variant A's own E0 configures processing_delay_ms=80.0 -- already under
+# both the violation (250ms) and recovery (150ms) thresholds its Event
+# Detector would use if one were deployed, so it would sit idle even if
+# present. Event Detector / P0 BatteryLow safety is not deployed in this
+# pass -- see 40-shared-infra.yaml's own header and the operator's
+# DEV_SMOKE_TEST.md for why that is an explicit simplification, not an
+# oversight.
+apiVersion: dronekube.io/v1alpha1
+kind: ROSModule
+metadata:
+  name: companion-analytics-drone01
+  namespace: cloud-native-p2
+  labels: {app: companion-analytics, robot: drone01}
+spec:
+  robotId: drone01
+  package: companion_analytics
+  lifecycleTarget: Active
+  placement: onboard
+  rosParamMap:
+    processing_delay_ms: "80.0"
+    queue_depth: "4"
+    cpu_percent: "25.0"
+    sample_period_ms: "250"
+---
+apiVersion: dronekube.io/v1alpha1
+kind: ROSModule
+metadata:
+  name: companion-analytics-drone02
+  namespace: cloud-native-p2
+  labels: {app: companion-analytics, robot: drone02}
+spec:
+  robotId: drone02
+  package: companion_analytics
+  lifecycleTarget: Active
+  placement: onboard
+  rosParamMap:
+    processing_delay_ms: "80.0"
+    queue_depth: "4"
+    cpu_percent: "25.0"
+    sample_period_ms: "250"
+---
+apiVersion: dronekube.io/v1alpha1
+kind: ROSModule
+metadata:
+  name: companion-analytics-drone03
+  namespace: cloud-native-p2
+  labels: {app: companion-analytics, robot: drone03}
+spec:
+  robotId: drone03
+  package: companion_analytics
+  lifecycleTarget: Active
+  placement: onboard
+  rosParamMap:
+    processing_delay_ms: "80.0"
+    queue_depth: "4"
+    cpu_percent: "25.0"
+    sample_period_ms: "250"

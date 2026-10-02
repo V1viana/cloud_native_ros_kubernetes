@@ -1,0 +1,25 @@
+# Variant B's single ROSModule for E2 -- the only reason Companion
+# Analytics exists in this scenario at all is to carry a State Bridge
+# sidecar that can report telemetry_heartbeat_age_sec (see bridge.py):
+# variant A's own E2 never runs Companion Analytics, its P1 remediation
+# pipeline has no notion of "module" at all. Declaring the same component
+# already proven for every other scenario, rather than inventing a
+# standalone carrier, keeps this consistent with the rest of the
+# declarative control plane instead of adding a second pattern just for
+# telemetry.
+apiVersion: dronekube.io/v1alpha1
+kind: ROSModule
+metadata:
+  name: companion-analytics-drone01
+  namespace: cloud-native-e2
+  labels: {app: companion-analytics, robot: drone01}
+spec:
+  robotId: drone01
+  package: companion_analytics
+  lifecycleTarget: Active
+  placement: onboard
+  rosParamMap:
+    processing_delay_ms: "80.0"
+    queue_depth: "4"
+    cpu_percent: "25.0"
+    sample_period_ms: "250"

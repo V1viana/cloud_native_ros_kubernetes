@@ -1,0 +1,59 @@
+# Variant B's own Fast DDS Discovery Server for the E2 single-node cluster
+# -- same mechanism as manifests/kubernetes/p2/10-discovery.yaml (proven
+# there), just its own copy: namespace cloud-native-e2, nodeSelector
+# kuberos.io/role=onboard (this cluster has one node, no separate
+# control_plane role like P2/E0's multi-node topology), image tagged :e2
+# to match this scenario's own build. Not variant A's UDP-only-transport
+# profile (manifests/kubernetes/e2/stack.yaml's e2-fastdds-udp ConfigMap):
+# the discovery-server mechanism already proven for P2/E0/E4/U1/U2 sidesteps
+# the same shared-memory-transport problem that profile works around,
+# without adding new volume-mount plumbing to k8s_workloads.py.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e2-fastdds-discovery
+  namespace: cloud-native-e2
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: e2-fastdds-discovery
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: e2-fastdds-discovery
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kuberos.io/role: onboard
+      containers:
+        - name: discovery
+          # :p2, not :e2 -- must match what scripts/run_e2.sh's VARIANT=b
+          # branch actually builds/imports (see its own comment for why).
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /opt/ros/humble/setup.bash
+              exec fastdds discovery -i 0 -l "$DISCOVERY_SERVER_ADDRESS" -p 11811
+          env:
+            - name: DISCOVERY_SERVER_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          ports:
+            - name: discovery
+              containerPort: 11811
+              protocol: UDP
+          readinessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["/bin/bash", "-c", "kill -0 1"]
+            periodSeconds: 10

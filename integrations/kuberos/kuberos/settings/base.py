@@ -67,6 +67,19 @@ DATABASES = {
     }
 }
 
+# Additive, opt-in only: default behavior (sqlite3's own 5s busy-timeout)
+# is unchanged unless this is explicitly set. Found live at N=20 (S3
+# scalability sweep): the API server's request handlers and the separate
+# Celery worker process both write to this same SQLite file, and once N
+# is high enough to generate overlapping deploy_rosmodule requests within
+# that 5s window, sqlite3 raises "database is locked" -- a write-
+# concurrency ceiling independent of CPU/RAM (confirmed live: unchanged
+# even after this host's cores were increased 12 -> 48), so raising the
+# busy-timeout is the applicable lever, not more compute.
+_sqlite_timeout = os.environ.get("KUBEROS_SQLITE_TIMEOUT")
+if _sqlite_timeout:
+    DATABASES["default"]["OPTIONS"] = {"timeout": float(_sqlite_timeout)}
+
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True

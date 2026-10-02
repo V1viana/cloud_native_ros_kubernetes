@@ -1,0 +1,144 @@
+# S4's drone01 fault (battery/P0): the event-detector (BatteryLowRule) and
+# fault-harness are E1's own packages, unmodified -- only the manifest
+# parametrization changes, to target drone01 on E0's three-drone
+# per-robot-namespaced fleet (PX4_UXRCE_DDS_NS=drone01, unlike E1's own
+# single-robot P2-style cluster where PX4 topics are un-namespaced).
+# drone01's own PX4/Agent are NOT redeployed here -- E0's declarative
+# infra (manifests/kubernetes/e0/40-shared-infra.yaml) already provides
+# them; this manifest only adds the two components E0's own baseline does
+# not include.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: s4-event-detector-config-drone01
+  namespace: cloud-native-p2
+data:
+  s4_battery_drone01.yaml: |
+    event_detector:
+      ros__parameters:
+        startup_state: 3
+        buffer:
+          default_time: 10.0
+          default_queue_size: 50
+          use_msg_stamp: true
+        analysis:
+          default_period: 0.1
+        rules:
+          - px4_event_detector_plugin::BatteryLowRule
+        rule_params:
+          px4_event_detector_plugin::BatteryLowRule:
+            enabled: true
+            period: 0.1
+            parameters:
+              robot_id: drone01
+              battery_topic: /drone01/s4/fault/battery_status
+              command_topic: /drone01/fmu/in/vehicle_command
+              ack_topic: /drone01/fmu/out/vehicle_command_ack_v1
+              vehicle_status_topic: /drone01/fmu/out/vehicle_status_v4
+              event_topic: /fleet/operational_events
+              threshold: 0.20
+              reset_threshold: 0.25
+              consecutive_samples: 3
+              max_message_age_sec: 2.0
+              max_attempts: 3
+              retry_timeout_sec: 2.0
+              target_system: 1
+              target_component: 1
+              source_system: 1
+              source_component: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s4-battery-event-detector-drone01
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: s4-battery-event-detector-drone01}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: s4-battery-event-detector-drone01}
+    spec:
+      nodeSelector: {kuberos.io/role: onboard, robot.kuberos.io/id: drone01}
+      containers:
+        - name: detector
+          image: cloud-native-ros/event-detector:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              exec ros2 launch event_detector event_detector.launch.py \
+                params:=/etc/event-detector/s4_battery_drone01.yaml \
+                log_level:=info
+          env:
+            - {name: ROS_DOMAIN_ID, value: "230"}
+            - {name: RMW_IMPLEMENTATION, value: rmw_fastrtps_cpp}
+            - {name: ROS_DISCOVERY_SERVER, value: "__P2_DISCOVERY_ADDRESS__:11811"}
+          volumeMounts:
+            - {name: detector-config, mountPath: /etc/event-detector, readOnly: true}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 1Gi}
+          startupProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -lc
+                - |
+                  source /ws/install/setup.bash
+                  raw=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /event_detector 2>/dev/null) || exit 1
+                  [ -n "$raw" ] || exit 1
+                  [ "${raw%% *}" = "active" ]
+            periodSeconds: 4
+            timeoutSeconds: 5
+            failureThreshold: 20
+          readinessProbe:
+            exec: {command: ["/bin/bash", "-c", "kill -0 1"]}
+            periodSeconds: 3
+      volumes:
+        - name: detector-config
+          configMap: {name: s4-event-detector-config-drone01}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s4-battery-fault-harness-drone01
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: s4-battery-fault-harness-drone01}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: s4-battery-fault-harness-drone01}
+    spec:
+      nodeSelector: {kuberos.io/role: onboard, robot.kuberos.io/id: drone01}
+      containers:
+        - name: harness
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              exec ros2 run e1_battery_fault_harness battery_fault_harness --ros-args \
+                -p battery_topic:=/drone01/s4/fault/battery_status \
+                -p command_topic:=/drone01/fmu/in/vehicle_command \
+                -p ack_topic:=/drone01/fmu/out/vehicle_command_ack_v1 \
+                -p vehicle_status_topic:=/drone01/fmu/out/vehicle_status_v4 \
+                -p startup_delay_sec:=__S4_FAULT_START_DELAY_SEC__ \
+                -p low_duration_sec:=8.0 \
+                -p recovery_duration_sec:=4.0 \
+                -p publish_frequency_hz:=10.0
+          env:
+            - {name: ROS_DOMAIN_ID, value: "230"}
+            - {name: RMW_IMPLEMENTATION, value: rmw_fastrtps_cpp}
+            - {name: ROS_DISCOVERY_SERVER, value: "__P2_DISCOVERY_ADDRESS__:11811"}
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {cpu: 250m, memory: 192Mi}
+          readinessProbe:
+            exec: {command: ["/bin/bash", "-c", "kill -0 1"]}
+            periodSeconds: 2

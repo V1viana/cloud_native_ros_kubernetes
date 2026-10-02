@@ -1,0 +1,387 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: rosmodules.dronekube.io
+spec:
+  group: dronekube.io
+  scope: Namespaced
+  names:
+    kind: ROSModule
+    plural: rosmodules
+    singular: rosmodule
+    shortNames: [rosmod]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Robot
+          type: string
+          jsonPath: .spec.robotId
+        - name: Lifecycle
+          type: string
+          jsonPath: .status.observedLifecycleState
+        - name: Placement
+          type: string
+          jsonPath: .status.observedPlacement
+        - name: Reconciled
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Reconciled")].status
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [robotId, package, lifecycleTarget, placement]
+              properties:
+                robotId:
+                  type: string
+                package:
+                  type: string
+                lifecycleTarget:
+                  type: string
+                  enum: [Unconfigured, Inactive, Active, Finalized]
+                placement:
+                  type: string
+                  enum: [onboard, edge]
+                # A/B temporal contract (V6, docs/CRD_CONTRACT_AUDIT.md): the
+                # length W of the tumbling p95 windows the State Bridge computes
+                # from this module's metric samples, variant A's window_sec.
+                # Optional (default 2.0, A's value in P2); AdaptationController
+                # counts only windows whose W equals its policy's windowSec.
+                # Stored JSON may turn 2.0 into 2: the operator passes float().
+                metricsWindowSec:
+                  type: number
+                  exclusiveMinimum: true
+                  minimum: 0
+                rosParamMap:
+                  type: object
+                  # String values only, same convention as ConfigMap.data --
+                  # not a stylistic choice. Found live: with an open numeric
+                  # field, Kubernetes silently normalizes "80.0" to the
+                  # integer 80 going through JSON storage; companion_analytics
+                  # declares processing_delay_ms as a ROS DOUBLE parameter and
+                  # rclpy rejects an integer override for it outright,
+                  # crash-looping the container. A string round-trips exactly
+                  # as written, so "80.0" reaches `ros2 run -p key:=80.0` and
+                  # is parsed as a float on the ROS side, same as "80" stays
+                  # an int if that really is what was meant.
+                  additionalProperties:
+                    type: string
+                  # R1, decision 2 (docs/CRD_CONTRACT_AUDIT.md): the platform sets
+                  # these for every module (identity, metrics topic, per-Pod health
+                  # topic); a user value would override the node's identity.
+                  x-kubernetes-validations:
+                    - rule: "!('robot_id' in self) && !('instance_id' in self) && !('metrics_topic' in self) && !('health_topic' in self)"
+                      message: "rosParamMap must not set platform-reserved parameters: robot_id, instance_id, metrics_topic, health_topic"
+                # R1, decision 4 (docs/CRD_CONTRACT_AUDIT.md): optional ClusterIP
+                # Service in front of the module's Pods, owned by the ROSModule,
+                # outside the revision (changing it never rolls the Pods). Only
+                # when the workload needs it: ROS 2/DDS modules do not.
+                service:
+                  type: object
+                  required: [ports]
+                  properties:
+                    type:
+                      type: string
+                      enum: [ClusterIP]
+                      default: ClusterIP
+                    ports:
+                      type: array
+                      minItems: 1
+                      x-kubernetes-list-type: map
+                      x-kubernetes-list-map-keys: [name]
+                      items:
+                        type: object
+                        required: [name, port]
+                        properties:
+                          name:
+                            type: string
+                            maxLength: 15
+                            pattern: "^[a-z]([-a-z0-9]*[a-z0-9])?$"
+                          port:
+                            type: integer
+                            minimum: 1
+                            maximum: 65535
+                          targetPort:
+                            type: integer
+                            minimum: 1
+                            maximum: 65535
+                          protocol:
+                            type: string
+                            enum: [TCP, UDP]
+                            default: TCP
+                probes:
+                  type: object
+                  properties:
+                    readiness:
+                      type: object
+                      required: [topic]
+                      properties:
+                        topic:
+                          type: string
+                          minLength: 1
+                          description: Base topic for Bool readiness; workload generation appends a Pod-specific suffix.
+                        timeoutSec:
+                          type: number
+                          default: 5
+                          minimum: 0
+                          exclusiveMinimum: true
+                    startup:
+                      type: object
+                      description: >-
+                        Overrides for the lifecycle startupProbe's own timing
+                        (default periodSeconds=3/timeoutSeconds=5/
+                        failureThreshold=30). Scenario-scoped escape hatch
+                        for slower ROS 2 graph discovery at higher N (S3);
+                        unset everywhere else.
+                      properties:
+                        periodSeconds:
+                          type: integer
+                          minimum: 1
+                        timeoutSeconds:
+                          type: integer
+                          minimum: 1
+                        failureThreshold:
+                          type: integer
+                          minimum: 1
+            status:
+              type: object
+              properties:
+                observedLifecycleState:
+                  type: string
+                  enum: [Unconfigured, Inactive, Active, Finalized, Unknown]
+                # Classified from the nodes the current Pods run on, not copied
+                # from spec.placement; absent while nothing is scheduled (R7).
+                observedPlacement:
+                  type: string
+                  enum: [onboard, edge, Unknown]
+                observedNodes:
+                  type: array
+                  items:
+                    type: string
+                # RobotFleet whose spec.robots lists spec.robotId (same
+                # namespace); absent if none or more than one does.
+                fleet:
+                  type: string
+                lastReconcileTime:
+                  type: string
+                  format: date-time
+                observedGeneration:
+                  type: integer
+                # Last reporter's readiness, removed when no probe is configured.
+                # Per-instance observations and activation gates are independent below.
+                observedReady:
+                  type: boolean
+                # Summary only: the retries charged by the LifecycleController's
+                # budget in lifecycleCommands (the highest over the instances).
+                transitionRetryCount:
+                  type: integer
+                  minimum: 0
+                # The lifecycle driven by the LifecycleController
+                # (docs/LIFECYCLE_COMMAND_CONTRACT_DRAFT.md), one writer per field:
+                # lifecycleInstances (State Bridge: observation), lifecycleCommands
+                # (LifecycleController: the authorized step and its budget),
+                # lifecycleReceipts (State Bridge: Accepted before the RPC, then the
+                # outcome). Must stay declared: the API server prunes undeclared
+                # status fields, and a pruned Accepted would let an RPC go unreceipted
+                # (the bridge checks the stored receipt before the RPC).
+                lifecycleInstances:
+                  type: object
+                  description: Per-instance observations written by that instance's State Bridge.
+                  additionalProperties:
+                    type: object
+                    properties:
+                      observedLifecycleState:
+                        type: string
+                      observedReady:
+                        type: boolean
+                        nullable: true
+                      lastObservedTime:
+                        type: string
+                        format: date-time
+                      generation:
+                        type: integer
+                        description: ROSModule generation the bridge read with this observation.
+                      target:
+                        type: string
+                        description: spec.lifecycleTarget the bridge read with this observation.
+                      podUID:
+                        type: string
+                lifecycleCommands:
+                  type: object
+                  description: One command per current instance, written by the LifecycleController only.
+                  additionalProperties:
+                    type: object
+                    properties:
+                      commandId:
+                        type: string
+                      podUID:
+                        type: string
+                      generation:
+                        type: integer
+                      target:
+                        type: string
+                      fromState:
+                        type: string
+                      toState:
+                        type: string
+                      readinessGate:
+                        type: boolean
+                      timeoutSec:
+                        type: number
+                      issuedAt:
+                        type: number
+                      deadline:
+                        type: number
+                      phase:
+                        type: string
+                        enum: [Issued, Backoff, WaitingReadiness, Exhausted]
+                      backoffReason:
+                        type: string
+                      budget:
+                        type: object
+                        properties:
+                          key:
+                            type: object
+                            properties:
+                              podUID:
+                                type: string
+                              generation:
+                                type: integer
+                              target:
+                                type: string
+                              fromState:
+                                type: string
+                          charged:
+                            type: integer
+                            minimum: 0
+                          lastChargedCommandId:
+                            type: string
+                            nullable: true
+                          undelivered:
+                            type: integer
+                            minimum: 0
+                          retryAt:
+                            type: number
+                            nullable: true
+                lifecycleReceipts:
+                  type: object
+                  description: One receipt per instance, written by that instance's State Bridge only.
+                  additionalProperties:
+                    type: object
+                    properties:
+                      commandId:
+                        type: string
+                      podUID:
+                        type: string
+                      phase:
+                        type: string
+                        enum: [Accepted, Succeeded, Failed, Unconfirmed, Rejected]
+                      reason:
+                        type: string
+                      acceptedAt:
+                        type: number
+                      completedAt:
+                        type: number
+                # Update/rollback tracking (U1/U2-equivalent): the
+                # controller has no other place to remember "what spec is
+                # actually known-good" across reconcile ticks -- Kopf
+                # handlers are stateless between invocations, status is the
+                # only thing that survives. revision counts successful
+                # convergences (0 = never converged, matching the proposal's
+                # own ROSModule.status example which shows revision-shaped
+                # bookkeeping only informally); lastGoodSpec/lastFailedSpec
+                # are copies of spec, not references, so a later edit to the
+                # live spec can never retroactively change what "good" meant
+                # at the time.
+                revision:
+                  type: integer
+                updateState:
+                  type: string
+                  enum: [Stable, RollingOut, RolledBack]
+                  default: Stable
+                pendingSince:
+                  type: string
+                  format: date-time
+                lastGoodSpec:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                lastFailedSpec:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                # Metric samples reported by the State Bridge (e.g. latency_p95_ms),
+                # read by AdaptationController -- keys are not fixed at the schema
+                # level because the metric set is policy-defined (see AdaptationPolicy).
+                metrics:
+                  type: object
+                  additionalProperties:
+                    type: string
+                # When the State Bridge last reported status.metrics, including a
+                # report with no samples. AdaptationController counts a window only
+                # on a value reported after its previous counted window, and holds
+                # both counters otherwise -- the imperative baseline's own rule
+                # (a window completes only with new samples). Without this field a
+                # dead or frozen bridge left its last value counting forever
+                # (docs/CRD_CONTRACT_AUDIT.md, D3). Must stay declared: the API
+                # server silently prunes undeclared status fields.
+                metricsObservedTime:
+                  type: string
+                  format: date-time
+                # R1, decision 4: the Service this module owns, absent if none.
+                serviceName:
+                  type: string
+                # Tumbling p95 windows (A/B temporal contract, V6), per State
+                # Bridge instance (same keys as lifecycleInstances): the last few
+                # closed windows with a sequence number, so AdaptationController
+                # counts each window once. Written by merge patch on the
+                # instance's own key; each window names its W.
+                metricWindows:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    properties:
+                      windowSec:
+                        type: number
+                      windows:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            seq:
+                              type: integer
+                            start:
+                              type: string
+                              format: date-time
+                            end:
+                              type: string
+                              format: date-time
+                            samples:
+                              type: integer
+                            p95Ms:
+                              type: number
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

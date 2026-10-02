@@ -411,6 +411,7 @@ class AnalyticsMigrationHandler:
         except Exception as exc:
             rollback_performed = False
             rollback_errors = []
+            edge_note = ""
             context.emit(
                 Phase.ROLLING_BACK,
                 0.82,
@@ -454,7 +455,17 @@ class AnalyticsMigrationHandler:
                         lambda: False,
                     )
                 except Exception as rollback_exc:
-                    rollback_errors.append(str(rollback_exc))
+                    # R5 (review round of 14fc04c): an edge that is already
+                    # gone cannot be deactivated, and that alone is not a
+                    # failed rollback. Excused only when its lifecycle
+                    # services are absent AND Kubernetes shows no ready edge
+                    # Pod; any other error still fails the rollback, and so
+                    # does a failed onboard reactivation above.
+                    if (getattr(rollback_exc, "service_unavailable", False)
+                            and self._edge_workload_gone(event)):
+                        edge_note = f"not needed, edge already gone ({rollback_exc})"
+                    else:
+                        rollback_errors.append(str(rollback_exc))
             if deployment_id:
                 try:
                     self._kuberos.delete_deployment(deployment_id, correlation_id)
@@ -470,6 +481,7 @@ class AnalyticsMigrationHandler:
                     metrics={
                         "error": str(exc),
                         "rollback_error": "; ".join(rollback_errors),
+                        **({"edge_deactivation": edge_note} if edge_note else {}),
                     },
                 )
             return ExecutionResult(
@@ -477,8 +489,24 @@ class AnalyticsMigrationHandler:
                 "analytics_migration_failed",
                 "ROLLED_BACK" if rollback_performed else "FAILED",
                 rollback_performed=rollback_performed,
-                metrics={"error": str(exc)},
+                metrics={
+                    "error": str(exc),
+                    **({"edge_deactivation": edge_note} if edge_note else {}),
+                },
             )
+
+    def _edge_workload_gone(self, event):
+        """No ready edge Pod left, or no edge Deployment at all, per Kubernetes.
+        Anything that cannot be checked counts as not gone."""
+        if self._kubernetes is None:
+            return False
+        try:
+            deployment = self._kubernetes.get_deployment(
+                self._namespace, f"{event.robot_id}-companion-analytics"
+            )
+        except Exception as lookup_exc:
+            return "HTTP 404" in str(lookup_exc)
+        return not (deployment.get("status", {}).get("readyReplicas") or 0)
 
 
 class ApplicationManager:

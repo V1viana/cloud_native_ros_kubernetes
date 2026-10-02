@@ -1,0 +1,36 @@
+# Time-to-rebuild external observer (docs/TTR_PILOT_PREREGISTRATION.md): its own namespace,
+# created before t0 and never part of either fleet. The control-plane image both variants
+# already use; the same DDS settings as the fleet (domain 230, Fast DDS, the bench's
+# discovery server), as a super client so that it sees the whole ROS graph. It only reads:
+# the probe (scripts/ttr/ros_probe.py, from the ConfigMap the runner creates) calls
+# GetState, never ChangeState.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ttr-observer
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ttr-ros-probe
+  namespace: ttr-observer
+spec:
+  nodeSelector:
+    kuberos.io/role: control_plane
+  restartPolicy: Never
+  containers:
+    - name: probe
+      image: cloud-native-ros/control-plane:p2
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "infinity"]
+      env:
+        - {name: ROS_DOMAIN_ID, value: "230"}
+        - {name: RMW_IMPLEMENTATION, value: rmw_fastrtps_cpp}
+        - {name: ROS_DISCOVERY_SERVER, value: "__TTR_DISCOVERY_ADDRESS__:11811"}
+        - {name: ROS_SUPER_CLIENT, value: "TRUE"}
+      volumeMounts:
+        - {name: probe, mountPath: /probe}
+  volumes:
+    - name: probe
+      configMap:
+        name: ttr-ros-probe

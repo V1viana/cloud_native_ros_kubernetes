@@ -17,6 +17,12 @@ options:
     timeout: "180s"
   k3s:
     extraArgs:
+      # etcd embedded, R14 target backend (Viviana, 2026-10-01 -- SQLite withdrawn as final):
+      # its metrics on :2381
+      - arg: "--cluster-init"
+        nodeFilters: ["server:0"]
+      - arg: "--etcd-expose-metrics"
+        nodeFilters: ["server:0"]
       - arg: "--disable=traefik"
         nodeFilters: ["server:*"]
       - arg: "--disable=servicelb"
@@ -25,4 +31,11 @@ options:
       - label: kuberos.io/role=onboard
         nodeFilters: ["server:0"]
       - label: robot.kuberos.io/name=drone01
+        nodeFilters: ["server:0"]
+      # Additive, variant B only: k8s_workloads.py's _node_selector() reads
+      # robot.kuberos.io/id (not /name, variant A's own key above), needed
+      # to schedule the declarative ROSModule Deployment onto this same
+      # single node. Variant A never reads this label, so adding it changes
+      # nothing for the imperative path.
+      - label: robot.kuberos.io/id=drone01
         nodeFilters: ["server:0"]

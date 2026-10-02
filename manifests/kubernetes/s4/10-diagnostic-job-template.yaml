@@ -1,0 +1,92 @@
+# S4 variant A's own diagnostic Job template for Application Manager's P1
+# restore_telemetry handler -- copied from manifests/kubernetes/e2/stack.yaml's
+# own e2-diagnostic-job-template verbatim (same plain K8s REST poller via the
+# Job Pod's own ServiceAccount token, no extra image dependency), only the
+# ConfigMap/label names changed to avoid clashing with any other scenario
+# sharing this cluster.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: s4-diagnostic-job-template
+  namespace: cloud-native-p2
+data:
+  job.yaml: |
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      generateName: telemetry-diag-
+      labels:
+        app.kubernetes.io/name: telemetry-diagnostics
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 310
+      ttlSecondsAfterFinished: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: telemetry-diagnostics
+        spec:
+          serviceAccountName: application-manager-s4
+          restartPolicy: Never
+          containers:
+          - name: collector
+            image: ros:humble-ros-base
+            imagePullPolicy: IfNotPresent
+            command: ["/bin/bash", "-ec"]
+            args:
+            - |
+              python3 - <<'PY'
+              import json
+              import os
+              import ssl
+              import time
+              from urllib.request import Request, urlopen
+
+              ns = os.environ["POD_NAMESPACE"]
+              host = os.environ["KUBERNETES_SERVICE_HOST"]
+              port = os.environ.get("KUBERNETES_SERVICE_PORT_HTTPS", "443")
+              account = "/var/run/secrets/kubernetes.io/serviceaccount"
+              token = open(f"{account}/token", encoding="utf-8").read().strip()
+              context = ssl.create_default_context(cafile=f"{account}/ca.crt")
+              base = f"https://{host}:{port}"
+
+              def get(path):
+                  request = Request(
+                      base + path,
+                      headers={"Authorization": f"Bearer {token}"},
+                  )
+                  with urlopen(request, context=context, timeout=5) as response:
+                      return json.load(response)
+
+              end = time.monotonic() + 300
+              while time.monotonic() < end:
+                  pods = get(f"/api/v1/namespaces/{ns}/pods")
+                  events = get(f"/apis/events.k8s.io/v1/namespaces/{ns}/events")
+                  print(json.dumps({
+                      "timestamp": time.time(),
+                      "robot_id": os.environ.get("ROBOT_ID", ""),
+                      "correlation_id": os.environ.get(
+                          "INCIDENT_CORRELATION_ID", ""
+                      ),
+                      "pods": [
+                          {
+                              "name": item["metadata"]["name"],
+                              "phase": item.get("status", {}).get("phase", ""),
+                          }
+                          for item in pods.get("items", [])
+                      ],
+                      "events": [
+                          {
+                              "reason": item.get("reason", ""),
+                              "action": item.get("action", ""),
+                          }
+                          for item in events.get("items", [])[-50:]
+                      ],
+                  }, sort_keys=True), flush=True)
+                  time.sleep(10)
+              PY
+            env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

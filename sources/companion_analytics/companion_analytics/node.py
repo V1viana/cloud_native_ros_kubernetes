@@ -6,6 +6,7 @@ import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool
 
 
 class CompanionAnalyticsNode(LifecycleNode):
@@ -21,9 +22,20 @@ class CompanionAnalyticsNode(LifecycleNode):
         self.declare_parameter("cpu_percent", 85.0)
         self.declare_parameter("sample_period_ms", 250)
         self.declare_parameter("health_service", "")
+        # The proposal's own ROSModule.spec.probes.readiness ({topic,
+        # timeoutSec}, S3) is a *topic*, deliberately distinct from
+        # GetHealthSnapshot above (a service, request/response) -- the
+        # State Bridge needs to observe readiness passively, the same
+        # arrival-tracking shape it already uses for the PX4 telemetry
+        # heartbeat, not poll a service every tick. Empty by default: a
+        # module with no spec.probes.readiness configured never gets this
+        # parameter set (see k8s_workloads.py), so it publishes nothing.
+        self.declare_parameter("health_topic", "")
 
         self._publisher = None
         self._timer = None
+        self._health_publisher = None
+        self._health_timer = None
         self._active = False
         self._lifecycle_state = "unconfigured"
 
@@ -51,6 +63,21 @@ class CompanionAnalyticsNode(LifecycleNode):
             float(self.get_parameter("sample_period_ms").value) / 1000.0,
         )
         self._timer = self.create_timer(period_sec, self._publish_metric)
+        health_topic = str(self.get_parameter("health_topic").value)
+        if health_topic:
+            # Started here, not on_activate: readiness is meant to be
+            # observable *before* activation is attempted (the proposal's
+            # ROSLifecyclePolicy.requireReadinessBeforeActive gates the
+            # Inactive -> Active transition on it), so it has to already be
+            # true once Inactive is reached, not only once Active already
+            # is. This node has nothing real to wait on (a simulated
+            # workload), so "configured" already means "ready" -- a real
+            # module would publish False here until its own dependencies
+            # are actually up.
+            self._health_publisher = self.create_publisher(
+                Bool, health_topic, QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE)
+            )
+            self._health_timer = self.create_timer(1.0, self._publish_health)
         self.get_logger().info(
             "Configured analytics instance '%s' with %.1f ms latency"
             % (
@@ -91,6 +118,12 @@ class CompanionAnalyticsNode(LifecycleNode):
         if self._publisher is not None:
             self.destroy_publisher(self._publisher)
             self._publisher = None
+        if self._health_timer is not None:
+            self.destroy_timer(self._health_timer)
+            self._health_timer = None
+        if self._health_publisher is not None:
+            self.destroy_publisher(self._health_publisher)
+            self._health_publisher = None
         return TransitionCallbackReturn.SUCCESS
 
     def _get_health_snapshot(self, request, response):
@@ -113,6 +146,11 @@ class CompanionAnalyticsNode(LifecycleNode):
                 "analytics metric publisher is " + self._lifecycle_state
             )
         return response
+
+    def _publish_health(self):
+        if self._health_publisher is None:
+            return
+        self._health_publisher.publish(Bool(data=True))
 
     def _publish_metric(self):
         if not self._active or self._publisher is None:

@@ -10,6 +10,16 @@ class LifecycleTransitionError(RuntimeError):
     """A managed node did not reach the requested primary state."""
 
 
+class LifecycleServiceUnavailable(LifecycleTransitionError):
+    """The node's lifecycle services are not on the graph at all (R5).
+
+    A subclass, so every existing handler still sees a transition error;
+    service_unavailable lets callers without a ROS import tell it apart.
+    """
+
+    service_unavailable = True
+
+
 class RosLifecycleCoordinator:
     """Drive and verify Lifecycle services without shelling out to ros2cli."""
 
@@ -131,7 +141,7 @@ class RosLifecycleCoordinator:
         )
         remaining = max(0.0, deadline - time.monotonic())
         if not client.wait_for_service(timeout_sec=remaining):
-            raise LifecycleTransitionError(
+            raise LifecycleServiceUnavailable(
                 f"Lifecycle service '{service_name}' is unavailable"
             )
         return client

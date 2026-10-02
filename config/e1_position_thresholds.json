@@ -1,0 +1,23 @@
+{
+  "rule": "max(3 x max deviation over both pilots, floor)",
+  "horizontal_m": 8.19,
+  "vertical_m": 1.299,
+  "floor_horizontal_m": 0.5,
+  "floor_vertical_m": 0.3,
+  "pilots": [
+    {
+      "file": "results/e1-pilot/20260925T162654Z/position-hold.txt",
+      "max_horizontal_m": 2.73,
+      "max_vertical_m": 0.36,
+      "truth_samples": 164,
+      "window_sec": 35.0
+    },
+    {
+      "file": "results/e1-pilot/20260925T163132Z/position-hold.txt",
+      "max_horizontal_m": 1.723,
+      "max_vertical_m": 0.433,
+      "truth_samples": 163,
+      "window_sec": 35.0
+    }
+  ]
+}

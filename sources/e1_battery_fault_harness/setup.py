@@ -25,6 +25,8 @@ setup(
         "console_scripts": [
             "battery_fault_harness = "
             "e1_battery_fault_harness.battery_fault_harness:main",
+            "s4_fault_observer = "
+            "e1_battery_fault_harness.fault_observer:main",
         ],
     },
 )

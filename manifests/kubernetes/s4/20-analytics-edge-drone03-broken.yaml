@@ -1,0 +1,80 @@
+# S4 variant A's drone03 SLO-migration target: a ConfigMap holding the same
+# deliberately-broken KubeROS ApplicationDeployment manifest as
+# manifests/kuberos/e4/analytics-edge-readiness-failure.yaml (readinessProbe
+# always fails -> AdaptationController-equivalent rollback), just
+# drone03-namespaced instead of drone01. Application Manager's own
+# manifest_factory (cloud_native_application_manager/node.py) only rewrites
+# metadata.name/targetRobots at runtime from the incoming event's robot_id,
+# not the entrypoint's hardcoded namespace/topics -- so, same as
+# manifests/kubernetes/p2/analytics-edge.yaml and e4's own file (both
+# hardcoded to drone01 for the same reason), this needs its own
+# drone03-specific copy rather than a shared, event-parametrized template.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: s4-analytics-edge-drone03-manifest
+  namespace: cloud-native-p2
+data:
+  analytics-edge-drone03.yaml: |
+    apiVersion: v1
+    kind: ApplicationDeployment
+
+    metadata:
+      name: analytics-edge-drone03
+      rosVersion: humble
+      rmwImplementation: fastdds
+      appVersion: s4-readiness-failure
+      targetFleet: uav-sim-fleet
+      targetRobots: [drone03]
+      edgeResourceGroup: [public]
+      discoveryServer:
+        create: false
+        serviceName: p2-fastdds-discovery
+        address: __P2_DISCOVERY_ADDRESS__
+        port: 11811
+
+    rosModules:
+      - name: companion-analytics
+        workloadKind: Deployment
+        replicas: 1
+        image: cloud-native-ros/control-plane:p2
+        imagePullPolicy: IfNotPresent
+        sourceWs: /ws/install/
+        entrypoint:
+          - |-
+            exec ros2 run companion_analytics companion_analytics --ros-args \
+              -r __node:=companion_analytics_edge \
+              -r __ns:=/drone03 \
+              -p robot_id:=drone03 \
+              -p instance_id:=edge \
+              -p metrics_topic:=/drone03/analytics/metrics \
+              -p health_service:=/drone03/companion/edge/health \
+              -p processing_delay_ms:=80.0 \
+              -p queue_depth:=2 \
+              -p cpu_percent:=35.0 \
+              -p sample_period_ms:=250
+        preference: [edge]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 96Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        startupProbe:
+          exec:
+            command: ["/bin/bash", "-c", "kill -0 1"]
+          periodSeconds: 2
+          failureThreshold: 30
+        readinessProbe:
+          exec:
+            command: ["/bin/bash", "-c", "exit 1"]
+          periodSeconds: 2
+          failureThreshold: 2
+        livenessProbe:
+          exec:
+            command: ["/bin/bash", "-c", "kill -0 1"]
+          periodSeconds: 10
+        requirements:
+          dynamicRescheduling: true
+          privileged: false

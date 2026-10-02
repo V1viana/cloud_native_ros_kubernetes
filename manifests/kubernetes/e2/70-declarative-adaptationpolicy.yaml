@@ -1,0 +1,48 @@
+# P1-equivalent (telemetry loss). R9 configuration (Viviana, 2026-09-26):
+# - trigger threshold 3.0s, the imperative rule's own default
+#   (sources/px4_event_detector_plugin/src/rules/telemetry_heartbeat_rule.cpp:
+#   timeout_sec 3.0), for a fair A/B comparison;
+# - windowSec 1 is the minimum evaluation interval, not an observation rate.
+#   The State Bridge reports telemetry_heartbeat_age_sec with its status tick,
+#   ordinarily every 5s (poll_interval_sec), as the worst gap seen since the
+#   previous report; AdaptationController ticks every 1s
+#   (ADAPTATION_TICK_INTERVAL_SEC) and counts a report only if it is newer than
+#   the last one counted (_fresh_metric, D3a), so windowSec 1 lets a new report
+#   be evaluated at the next tick and never counts one report twice. (It was 5,
+#   justified by a 5s controller tick that no longer exists.)
+# - trigger.consecutiveWindows 1: the first report over threshold fires. The
+#   fault stops the real micro_ros_agent process (SIGSTOP, run_e2.sh); the
+#   imperative rule detects the loss in a flat 3s, and a slower trigger could
+#   lose the race with the Agent's restart.
+# - recovery on 3 new reports at <= 1.0s (about 15s at the ordinary report
+#   cadence): a confirmation, not time-critical, that avoids flapping back to
+#   Remediating on one noisy report. It differs from A's recovery (3 heartbeats
+#   within 2s, stable for 3s): declared, not aligned.
+# - rollback.onReadinessFailureSec 45, the same limit as A's goal timeout
+#   (manifests/kubernetes/e2/stack.yaml, goal_timeout_sec 45.0). Origins differ:
+#   B counts from restartedAt (the rollout of the Agent Deployment), A from the
+#   start of the goal's execution in the Application Manager. It was 90 with no
+#   recorded reason.
+apiVersion: dronekube.io/v1alpha1
+kind: AdaptationPolicy
+metadata:
+  name: telemetry-heartbeat-e2
+  namespace: cloud-native-e2
+spec:
+  targetModuleSelector:
+    matchLabels: {app: companion-analytics, robot: drone01}
+  trigger:
+    metric: telemetry_heartbeat_age_sec
+    threshold: 3.0
+    consecutiveWindows: 1
+    windowSec: 1
+  action:
+    type: RestartComponent
+    targetDeploymentSelector:
+      matchLabels: {app.kubernetes.io/name: drone01-microxrce-agent}
+  recovery:
+    metric: telemetry_heartbeat_age_sec
+    threshold: 1.0
+    consecutiveWindows: 3
+  rollback:
+    onReadinessFailureSec: 45

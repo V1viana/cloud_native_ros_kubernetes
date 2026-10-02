@@ -1,0 +1,87 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: robotfleets.dronekube.io
+spec:
+  group: dronekube.io
+  scope: Namespaced
+  names:
+    kind: RobotFleet
+    plural: robotfleets
+    singular: robotfleet
+    shortNames: [rfleet]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: integer
+          jsonPath: .status.readyRobots
+        - name: Available
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Available")].status
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [robots]
+              properties:
+                robots:
+                  type: array
+                  minItems: 1
+                  # Membership keyed by robot id: the API server rejects a
+                  # duplicate id instead of letting readyRobots count it twice.
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [id]
+                  items:
+                    type: object
+                    required: [id, role]
+                    properties:
+                      id:
+                        type: string
+                      role:
+                        type: string
+                        enum: [onboard]
+                edgeNodeSelector:
+                  type: object
+                  additionalProperties:
+                    type: string
+            status:
+              type: object
+              properties:
+                readyRobots:
+                  type: integer
+                # Nodes matching edgeNodeSelector (default: kuberos.io/role=edge).
+                edgeNodes:
+                  type: array
+                  items:
+                    type: string
+                observedGeneration:
+                  type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

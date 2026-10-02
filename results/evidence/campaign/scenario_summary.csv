@@ -1,6 +1,0 @@
-scenario,purpose,trigger,observed_runs,valid_runs,passed_runs,pass_rate_pct,mission_success_pct,rollback_rate_pct,reaction_mean_ms,reaction_p95_ms,recovery_mean_ms,recovery_p95_ms,convergence_mean_ms,convergence_p95_ms,manager_mean_ms,manager_p95_ms
-E0,Nominal baseline,No fault,10,10,9,90.0,100.0,0.0,,,,,,,,
-E1,Local safety,BatteryLow with control-plane partition,10,10,10,100.0,100.0,0.0,249.700,288.650,,,,,23.344,26.591
-E2,Native recovery,TelemetryHeartbeatLost,11,10,9,90.0,100.0,0.0,,,32460.444,33013.200,34071.000,41751.200,,
-P2,Edge placement,AnalyticsLatencySLO,10,10,10,100.0,100.0,0.0,,,,,33200.000,37000.000,15598.838,16998.232
-E4,Policy rollback,Edge readiness failure,10,10,10,100.0,100.0,100.0,,,,,63700.000,65550.000,45734.067,45768.163

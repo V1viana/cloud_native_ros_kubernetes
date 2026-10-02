@@ -1,0 +1,51 @@
+# S4 variant A's drone01 fault harness only -- no separate event-detector
+# Deployment here (unlike manifests/kubernetes/s4/80-battery-fault-drone01.yaml,
+# variant B's own copy): in variant A, drone01's own KubeROS-managed
+# event-detector (one per robot, part of the ApplicationDeployment rendered
+# by scripts/render_s4_manifests.py) already carries BatteryLowRule, so a
+# second detector here would just double-publish the same event. The
+# harness itself is a plain ROS 2 node with no Kubernetes-API awareness, so
+# it is reused verbatim (same image, same e1_battery_fault_harness binary,
+# same drone01-namespaced topics) regardless of which control plane variant
+# is watching those topics.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s4-battery-fault-harness-drone01
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: s4-battery-fault-harness-drone01}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: s4-battery-fault-harness-drone01}
+    spec:
+      nodeSelector: {kuberos.io/role: onboard, robot.kuberos.io/id: drone01}
+      containers:
+        - name: harness
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              exec ros2 run e1_battery_fault_harness battery_fault_harness --ros-args \
+                -p battery_topic:=/drone01/s4/fault/battery_status \
+                -p command_topic:=/drone01/fmu/in/vehicle_command \
+                -p ack_topic:=/drone01/fmu/out/vehicle_command_ack_v1 \
+                -p vehicle_status_topic:=/drone01/fmu/out/vehicle_status_v4 \
+                -p startup_delay_sec:=__S4_FAULT_START_DELAY_SEC__ \
+                -p low_duration_sec:=8.0 \
+                -p recovery_duration_sec:=4.0 \
+                -p publish_frequency_hz:=10.0
+          env:
+            - {name: ROS_DOMAIN_ID, value: "230"}
+            - {name: RMW_IMPLEMENTATION, value: rmw_fastrtps_cpp}
+            - {name: ROS_DISCOVERY_SERVER, value: "__P2_DISCOVERY_ADDRESS__:11811"}
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {cpu: 250m, memory: 192Mi}
+          readinessProbe:
+            exec: {command: ["/bin/bash", "-c", "kill -0 1"]}
+            periodSeconds: 2

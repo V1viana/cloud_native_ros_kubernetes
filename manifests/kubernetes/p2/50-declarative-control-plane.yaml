@@ -1,0 +1,265 @@
+# Variant B's control plane for the P2 scenario: Fleet Operator + RBAC,
+# namespaced to cloud-native-p2 (the dev-cluster reference copies in
+# operator/rbac.yaml and operator/deployment.yaml hardcode
+# dronekube-operator instead -- kept separate rather than parametrized,
+# following this project's existing convention of one hardcoded manifest
+# set per scenario directory, e.g. manifests/kubernetes/p2/00-rbac.yaml).
+#
+# The four dronekube.io CRDs themselves are cluster-scoped and applied
+# straight from operator/crds/*.yaml, not duplicated here.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fleet-operator
+  namespace: cloud-native-p2
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cloud-native-p2-fleet-operator-discovery
+rules:
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["kopf.dev"]
+    resources: ["clusterkopfpeerings"]
+    verbs: ["list", "watch", "patch", "get"]
+  # R7: node labels, read-only -- RobotFleet.status.edgeNodes (nodes matching
+  # edgeNodeSelector) and ROSModule.status.observedPlacement (where Pods run).
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cloud-native-p2-fleet-operator-discovery
+subjects:
+  - kind: ServiceAccount
+    name: fleet-operator
+    namespace: cloud-native-p2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cloud-native-p2-fleet-operator-discovery
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fleet-operator
+  namespace: cloud-native-p2
+rules:
+  - apiGroups: ["dronekube.io"]
+    resources: [robotfleets, rosmodules, roslifecyclepolicies, adaptationpolicies]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  # rosmodules alone also needs create and delete -- see operator/rbac.yaml
+  # for why (adaptation_controller.py creates the blue/green migration's
+  # edge instance itself and deletes it again on rollback; nothing else in
+  # this Role creates or deletes a top-level object).
+  - apiGroups: ["dronekube.io"]
+    resources: [rosmodules]
+    verbs: ["create", "delete"]
+  - apiGroups: ["dronekube.io"]
+    resources: [robotfleets/status, rosmodules/status, roslifecyclepolicies/status, adaptationpolicies/status]
+    verbs: ["patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # R1, decision 4: the optional ClusterIP Service a ROSModule may declare.
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Lifecycle convergence checks the Deployment -> ReplicaSet -> Pod ownership
+  # chain instead of trusting only the instances that happen to report status
+  # (lifecycle_controller.py's module_lifecycle_summary()). Mirrors
+  # operator/rbac.yaml; missing here would cause a live 403 the first time
+  # this Role's own fleet-operator actually reconciles a ROSModule.
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  # HPA for the edge instance (proposal S4.1: "l'HPA ne possiede lo
+  # scaling") -- adaptation_controller.py's _create_edge_hpa(). Missing
+  # this caused a live 403 the first time an edge migration tried to
+  # create one, same class of gap as the Jobs rule below.
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # RestartComponent (P1-equivalent, adaptation_controller.py's
+  # _restart_component()) triggers a real rollout via the Deployment's own
+  # pod-template annotations, already covered by the "apps"/deployments
+  # patch verb above -- no separate pods grant needed. _create_diagnostic_job()
+  # needs create only, on purpose: the operator never reads a Job back or
+  # deletes one itself (Kubernetes' own garbage collector reclaims it via
+  # the ownerReference once the AdaptationPolicy that created it is
+  # deleted). Same rule as operator/rbac.yaml; missing here caused a live
+  # 403 during S4 (fleet-operator ServiceAccount in this namespace, not
+  # dronekube-operator's own, is the one that actually creates the Job).
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create"]
+  # R8: per-Pod CPU/memory from metrics-server, read-only, as decision
+  # context of the AdaptationController (never a trigger, never replicas).
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fleet-operator
+  namespace: cloud-native-p2
+subjects:
+  - kind: ServiceAccount
+    name: fleet-operator
+    namespace: cloud-native-p2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fleet-operator
+---
+# Least-privilege ServiceAccount for the diagnostic Job itself
+# (diagnostic_job.py): read-only, separate from fleet-operator's own
+# broader ServiceAccount -- it only ever lists Pods and Events. Mirrors
+# operator/rbac.yaml's own copy, namespaced to cloud-native-p2 instead of
+# dronekube-operator (adaptation_controller.py hardcodes serviceAccountName
+# "telemetry-diagnostics" in whichever namespace the AdaptationPolicy
+# lives, i.e. this one for P2/S4).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: telemetry-diagnostics
+  namespace: cloud-native-p2
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: telemetry-diagnostics
+  namespace: cloud-native-p2
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: telemetry-diagnostics
+  namespace: cloud-native-p2
+subjects:
+  - kind: ServiceAccount
+    name: telemetry-diagnostics
+    namespace: cloud-native-p2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: telemetry-diagnostics
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: state-bridge
+  namespace: cloud-native-p2
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: state-bridge
+  namespace: cloud-native-p2
+rules:
+  - apiGroups: ["dronekube.io"]
+    resources: ["rosmodules"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["dronekube.io"]
+    resources: ["rosmodules/status"]
+    verbs: ["patch"]
+  # no access to roslifecyclepolicies: the bridge no longer reads the policy since the
+  # LifecycleController drives the lifecycle (traceability C5, least privilege)
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: state-bridge
+  namespace: cloud-native-p2
+subjects:
+  - kind: ServiceAccount
+    name: state-bridge
+    namespace: cloud-native-p2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: state-bridge
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleet-operator
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: fleet-operator
+  template:
+    metadata:
+      labels:
+        app: fleet-operator
+    spec:
+      serviceAccountName: fleet-operator
+      nodeSelector:
+        kuberos.io/role: control_plane
+      containers:
+        - name: fleet-operator
+          image: cloud-native-ros/fleet-operator:p2
+          imagePullPolicy: IfNotPresent
+          command: ["kopf"]
+          args: ["run", "--standalone", "--namespace=cloud-native-p2", "-m", "fleet_operator.handlers"]
+          env:
+            - name: ROS_DISCOVERY_SERVER_ADDRESS
+              value: __P2_DISCOVERY_ADDRESS__
+            - name: ROS_DOMAIN_ID
+              value: "230"
+            # Read by adaptation_controller.py to build the diagnostic Job
+            # for RestartComponent (P1-equivalent): reuses this same image
+            # rather than building a dedicated one, since it already has
+            # the kubernetes client installed and needs nothing ROS-specific
+            # to poll the Pod/Event API.
+            - name: FLEET_OPERATOR_IMAGE
+              value: cloud-native-ros/fleet-operator:p2
+            # Read by fleet_operator/audit.py -- same shared Audit Writer /
+            # Operator Notifier Services variant A's own Application
+            # Manager already posts to (manifests/kubernetes/p2/
+            # 25-observability.yaml, variant-agnostic), so both variants'
+            # audit.jsonl can be compared with the same tooling (proposal
+            # S4.1: "invariati... osservati da entrambe le varianti").
+            # Left empty (silently a no-op, see audit.py) on any cluster
+            # that never applies 25-observability.yaml.
+            - name: AUDIT_URL
+              value: http://p2-audit-writer:8080/records
+            - name: NOTIFIER_URL
+              value: http://p2-operator-notifier:8081/notifications
+---
+# The namespace's shared lifecycle rules, with the proposal's own example
+# values. The State Bridge reads this exact name on every transition attempt
+# (bridge.py, DEFAULT_POLICY_NAME). Until 2026-09-23 no scenario created it:
+# the bridge got a 404 and fell back to the same values hardcoded in its code,
+# so the declarative path was never exercised (docs/CRD_CONTRACT_AUDIT.md, D8).
+apiVersion: dronekube.io/v1alpha1
+kind: ROSLifecyclePolicy
+metadata:
+  name: default-lifecycle-policy
+  namespace: cloud-native-p2
+spec:
+  transitionTimeoutSec: 15
+  maxTransitionRetries: 3
+  requireReadinessBeforeActive: true

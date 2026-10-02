@@ -49,6 +49,14 @@ spec:
               value: redis://localhost:6379/0
             - name: KUBEROS_SQLITE_PATH
               value: /state/db.sqlite3
+            # Additive, opt-in per settings/base.py: default sqlite3
+            # busy-timeout (5s) is too short once N robots generate
+            # overlapping deploy_rosmodule requests against the API
+            # server's shared SQLite file -- found live at S3 N=20
+            # ("database is locked", unrelated to CPU/RAM). Harmless at
+            # the low concurrency every other scenario runs at.
+            - name: KUBEROS_SQLITE_TIMEOUT
+              value: "20"
             - name: KUBEROS_MEDIA_ROOT
               value: /state/media
             - name: KUBEROS_TARGET_NAMESPACE

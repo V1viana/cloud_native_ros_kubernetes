@@ -71,27 +71,28 @@ spec:
               trap 'kill -TERM "$child"; wait "$child"' TERM INT
               lifecycle_node=/drone01/companion_analytics_onboard
               for attempt in $(seq 1 30); do
-                lifecycle_state=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
+                raw=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
                   ros2 lifecycle get "$lifecycle_node" 2>/dev/null | tail -n 1 || true)
+                lifecycle_state="${raw%% *}"
                 case "$lifecycle_state" in
-                  *unconfigured*)
+                  unconfigured)
                     ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
                       ros2 lifecycle set "$lifecycle_node" configure || true
                     ;;
-                  *inactive*)
+                  inactive)
                     ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
                       ros2 lifecycle set "$lifecycle_node" activate || true
                     ;;
-                  *active*)
+                  active)
                     break
                     ;;
                 esac
                 sleep 1
               done
-              lifecycle_state=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
+              raw=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 \
                 ros2 lifecycle get "$lifecycle_node" 2>/dev/null | tail -n 1 || true)
-              if [[ "$lifecycle_state" != *active* ]]; then
-                echo "Failed to activate $lifecycle_node; last state: $lifecycle_state" >&2
+              if [[ "${raw%% *}" != "active" ]]; then
+                echo "Failed to activate $lifecycle_node; last state: $raw" >&2
                 kill -TERM "$child"
                 wait "$child" || true
                 exit 1
@@ -118,9 +119,10 @@ spec:
                 - -lc
                 - |
                   source /ws/install/setup.bash
-                  ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get \
-                    /drone01/companion_analytics_onboard |
-                    grep -q active
+                  raw=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get \
+                    /drone01/companion_analytics_onboard 2>/dev/null) || exit 1
+                  [ -n "$raw" ] || exit 1
+                  [ "${raw%% *}" = "active" ]
             periodSeconds: 3
             timeoutSeconds: 5
             failureThreshold: 20
@@ -182,8 +184,9 @@ spec:
                 - -lc
                 - |
                   source /ws/install/setup.bash
-                  ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /event_detector |
-                    grep -q active
+                  raw=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /event_detector 2>/dev/null) || exit 1
+                  [ -n "$raw" ] || exit 1
+                  [ "${raw%% *}" = "active" ]
             periodSeconds: 4
             timeoutSeconds: 5
             failureThreshold: 20

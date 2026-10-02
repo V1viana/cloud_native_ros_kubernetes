@@ -1,0 +1,46 @@
+# S4 fault observer (R13): records, from the CONTROL-PLANE node and independently of
+# the control plane under test, every BatteryStatus of drone01's fault harness (the
+# injected value observed) and every vehicle_status of drone02 through its Agent (the
+# stopped Agent's effect and its return). Same manifest in A and B. Evidence on a
+# hostPath of its node, read from the host.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s4-fault-observer
+  namespace: cloud-native-p2
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: s4-fault-observer}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: s4-fault-observer}
+    spec:
+      nodeSelector: {kuberos.io/role: control_plane}
+      containers:
+        - name: observer
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              source /ws/install/setup.bash
+              exec ros2 run e1_battery_fault_harness s4_fault_observer --ros-args \
+                -p out_file:=/var/lib/s4-observer/faults.jsonl \
+                -p "battery_topics:=[/drone01/s4/fault/battery_status]" \
+                -p "status_topics:=[/drone02/fmu/out/vehicle_status_v4]"
+          env:
+            - {name: ROS_DOMAIN_ID, value: "230"}
+            - {name: RMW_IMPLEMENTATION, value: rmw_fastrtps_cpp}
+            - {name: ROS_DISCOVERY_SERVER, value: "__P2_DISCOVERY_ADDRESS__:11811"}
+          volumeMounts:
+            - {name: out, mountPath: /var/lib/s4-observer}
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {cpu: 250m, memory: 192Mi}
+          readinessProbe:
+            exec: {command: ["/bin/bash", "-c", "kill -0 1"]}
+            periodSeconds: 2
+      volumes:
+        - name: out
+          hostPath: {path: /var/lib/s4-observer, type: DirectoryOrCreate}

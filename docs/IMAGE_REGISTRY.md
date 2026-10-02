@@ -1,84 +1,93 @@
-# Pubblicazione Delle Immagini Di Progetto
+# Immagini Di Progetto E Registry
 
-## Obiettivo
+## Come Vengono Usate Le Immagini
 
-Le immagini della campagna storica sono fissate tramite Docker image ID locale.
-Questo e' sufficiente a identificare i byte osservati sulla VM, ma non permette
-a un altro host di scaricarli. Il workflow registry pubblica i tre build di
-progetto e salva i digest OCI restituiti dal registry.
+I runner degli scenari costruiscono le immagini dai Dockerfile in `containers/`
+e le importano nel cluster k3d. In questo modo un'esecuzione e' identificata
+dall'ID locale dell'immagine, che pero' non puo' essere scaricato da un altro
+host. Il flusso descritto qui pubblica le immagini su un registry e ne salva i
+digest, cosi' un'esecuzione puo' partire da riferimenti immutabili.
 
-Le immagini upstream ROS 2, PX4, Micro XRCE-DDS Agent e Redis hanno gia' un
-repo digest nel manifest di riproducibilita' della campagna.
+Le immagini di terze parti (ROS 2, PX4, Micro XRCE-DDS Agent) sono gia'
+identificate dal digest del loro registry.
 
-## Immagini Pubblicate
+## Catalogo
 
-Il catalogo [`config/project_images.json`](../config/project_images.json)
-definisce tre build:
+[`config/project_images.json`](../config/project_images.json) elenca le immagini
+che lo script sa costruire e pubblicare:
 
-| Build | Alias locali coperti |
-| --- | --- |
-| control-plane | `control-plane:p2`, `control-plane:e2` |
-| event-detector | `event-detector:p2`, `event-detector:e2-upstream` |
-| kuberos | `kuberos:p2` |
+| Immagine | Dockerfile | Contenuto |
+| --- | --- | --- |
+| `control-plane` | `containers/control-plane` | Dispatcher, Application Manager, Companion Analytics, osservabilita' |
+| `event-detector` | `containers/event-detector` | Event Detector con le regole PX4 |
+| `kuberos` | `containers/kuberos` | KubeROS adattato |
+| `state-bridge` | `containers/state-bridge` | sidecar della variante dichiarativa |
+| `lifecycle-fault-probe` | `containers/lifecycle-fault-probe` | modulo di prova del lifecycle |
+| `mission-observer` | `containers/mission-observer` | osservatore dello stato PX4 |
 
-Le tre immagini vengono pubblicate nello stesso repository privato con tag distinti:
-`control-plane-<release>`, `event-detector-<release>` e `kuberos-<release>`.
-Questo formato rispetta il modello Docker Hub `namespace/repository` e richiede
-un solo repository privato.
+Le immagini `fleet-operator` e `s2-harness` hanno un Dockerfile in `containers/`
+e vengono costruite dai runner, ma non sono nel catalogo.
 
-P2 ed E2 usano lo stesso Dockerfile per control plane ed Event Detector. Una
-release nuova li ricostruisce una volta e associa entrambi gli alias allo stesso
-digest; questo non modifica gli identificatori archiviati della campagna 2026.
-
-## Dry-run Sicuro
+## Prova Senza Effetti
 
 Il comando predefinito non costruisce e non pubblica:
 
 ```bash
 python3 scripts/publish_project_images.py \
-  --repository docker.io/USERNAME/cloud-native-ros-kubernetes \
-  --release project-20260902
+  --repository docker.io/UTENTE/cloud-native-ros-kubernetes \
+  --release NOME-RELEASE
 ```
 
-Mostra i comandi `docker tag` e `docker push`. Le credenziali non vengono
-lette, salvate o stampate dallo script; l'autenticazione resta responsabilita'
-del client Docker.
+Mostra i comandi `docker tag` e `docker push`. Lo script non legge, non salva e
+non stampa credenziali: l'autenticazione resta al client Docker.
 
 ## Build E Pubblicazione
 
-Dopo avere autenticato Docker verso il registry:
+Dopo l'autenticazione di Docker verso il registry:
 
 ```bash
 python3 scripts/publish_project_images.py \
-  --repository docker.io/USERNAME/cloud-native-ros-kubernetes \
-  --release project-20260902 \
+  --repository docker.io/UTENTE/cloud-native-ros-kubernetes \
+  --release NOME-RELEASE \
   --build \
   --push
 ```
 
-`--push` e' obbligatorio per qualsiasi operazione remota. Al termine viene
-creato `results/registry/<release>.lock.json` con:
+`--push` e' obbligatorio per ogni operazione remota. Le immagini finiscono nello
+stesso repository con un tag per immagine, `<immagine>-<release>`. Al termine
+viene scritto `results/registry/<release>.lock.json` con:
 
 - commit del repository;
-- image ID della build locale;
+- ID dell'immagine costruita;
 - tag pubblicato;
-- digest OCI immutabile `repository@sha256:...`;
-- alias locali sostituiti da quella immagine.
+- digest immutabile `repository@sha256:...`;
+- nomi locali sostituiti da quell'immagine.
 
-Un push non retroattivo produce una release del commit corrente. Non deve
-essere presentato come pubblicazione delle immagini originali della campagna,
-che restano identificate dai valori in `reproducibility.json`.
+## Uso Di Un Lock Negli Scenari
 
-## Registry Privato E KubeROS
+Un runner usa i digest di un lock quando riceve il file:
 
-Per un repository pubblico non serve un pull secret. Per un repository privato:
+```bash
+IMAGE_LOCK_FILE=results/registry/NOME-RELEASE.lock.json scripts/run_e0.sh
+```
 
-1. creare in KubeROS un Container Registry Access Token con permesso pull;
-2. sincronizzare il token nel namespace del cluster gestito;
+`scripts/render_image_lock.py` sostituisce i nomi locali nei manifest e
+`scripts/verify_image_lock_runtime.py` confronta i digest con le immagini
+effettivamente eseguite dai container.
+
+[`config/project-image-lock.json`](../config/project-image-lock.json) e' il lock
+di una release del 2 settembre 2026. Contiene le tre immagini della variante
+imperativa (`control-plane`, `event-detector`, `kuberos`) e precede la variante
+dichiarativa: e' un esempio del formato, non lo stato attuale del codice.
+
+## Registry Privato
+
+Per un repository pubblico non serve un Secret di pull. Per uno privato:
+
+1. creare in KubeROS un token di accesso al registry con permesso di pull;
+2. sincronizzarlo nel namespace del cluster gestito;
 3. dichiarare il registry nel manifest KubeROS;
 4. selezionarlo nel modulo con `containerRegistryName`.
-
-Esempio logico:
 
 ```yaml
 containerRegistry:
@@ -89,45 +98,8 @@ containerRegistry:
 rosModules:
   - name: companion-analytics
     containerRegistryName: project-registry
-    image: docker.io/USERNAME/cloud-native-ros-kubernetes@sha256:DIGEST
+    image: docker.io/UTENTE/cloud-native-ros-kubernetes@sha256:DIGEST
 ```
 
-Il Secret non deve essere committato nel repository. La documentazione tecnica deve riportare il
-digest, non token, password o il contenuto di `.docker/config.json`.
-
-## Esito Della Release Project-093e686
-
-Il 2 settembre 2026 i tre tag sono stati pubblicati nel repository Docker Hub
-privato `vivianacasale/cloud-native-ros-kubernetes`. Il lock machine-readable e'
-nel file [`config/project-image-lock.json`](../config/project-image-lock.json).
-
-I tre pull autenticati tramite digest sono riusciti e una richiesta anonima alla
-repository API ha restituito `404`. R1 ha inoltre creato tramite KubeROS un
-Companion Analytics temporaneo dal digest control-plane, verificato
-`Ready`/imageID/placement onboard e infine eliminato lo stesso
-ApplicationDeployment tramite KubeROS. Le evidenze sono nel
-[report R1](../results/evidence/runs/REGISTRY.md).
-
-Una successiva esecuzione E0 pulita ha consumato lo stesso lock nei runner:
-KubeROS, control plane, osservabilita', bootstrap, tre Event Detector e tre
-Companion Analytics sono stati avviati dai digest privati. Il gate runtime ha
-confrontato repository e SHA-256 di 16/16 container con gli `imageID` osservati.
-Il risultato e' nel [report E0 da registry](../results/evidence/runs/E0_REGISTRY.md)
-e nella relativa `image-provenance.csv` (output locale non versionato).
-
-Un tentativo preliminare ha rilevato la scadenza del token Knox sul cluster
-rimasto attivo per 13 ore. Il runner ora rinnova il token con il bootstrap
-idempotente prima della prova e non salva il valore nei risultati.
-
-## Criterio Di Chiusura
-
-L'incremento e' completo quando:
-
-1. i tre push terminano con successo;
-2. il lock contiene tre digest del registry;
-3. un pull autenticato risolve i tre digest;
-4. un banco breve usa i riferimenti immutabili tramite KubeROS;
-5. il nuovo report distingue la release pubblicata dalla campagna storica.
-
-Tutti e cinque i criteri sono soddisfatti dalla release, dal lock, da R1 e
-dalla prova E0 completa per digest.
+Il Secret non va versionato. La documentazione riporta il digest, mai token,
+password o il contenuto di `.docker/config.json`.

@@ -16,6 +16,14 @@
 !sources/e2_telemetry_harness/**
 !sources/px4_event_detector_plugin/
 !sources/px4_event_detector_plugin/**
+!sources/state_bridge/
+!sources/state_bridge/**
+!operator/
+!operator/requirements.txt
+!operator/fleet_operator/
+!operator/fleet_operator/**
+!config/
+!config/project_images.json
 !integrations/
 !integrations/px4_msgs/
 !integrations/px4_msgs/**
@@ -29,3 +37,10 @@
 !patches/
 !patches/robotkube-event-detector/
 !patches/robotkube-event-detector/**
+# Host-side bytecode never enters a build context: a judge run on the host imports
+# modules from sources/ and writes __pycache__ there; the next build then misses the
+# cache and a rebuilt colcon layer gets another image ID (S2-B control, 30 September
+# 2026, results/evidence/runs/LIFECYCLE_REGRESSIONS.md). Last, so they win over the
+# includes above.
+**/__pycache__
+**/*.pyc

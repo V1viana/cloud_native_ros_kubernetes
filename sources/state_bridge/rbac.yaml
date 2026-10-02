@@ -1,0 +1,40 @@
+# State Bridge RBAC: deliberately narrower than the Fleet Operator's
+# (operator/rbac.yaml) -- it only ever reads one ROSModule's spec and
+# patches that same object's status, never touches Deployments, other
+# CRDs, or anything cluster-scoped. One ServiceAccount is shared by every
+# State Bridge sidecar in the namespace (all need the same two verbs on
+# the same resource type); RBAC does not let a Role scope a single verb to
+# a single object *by name*, so per-drone isolation would need one
+# ServiceAccount + Role pair per ROSModule if that boundary ever matters.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: state-bridge
+  namespace: dronekube-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: state-bridge
+  namespace: dronekube-operator
+rules:
+  - apiGroups: ["dronekube.io"]
+    resources: ["rosmodules"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["dronekube.io"]
+    resources: ["rosmodules/status"]
+    verbs: ["patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: state-bridge
+  namespace: dronekube-operator
+subjects:
+  - kind: ServiceAccount
+    name: state-bridge
+    namespace: dronekube-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: state-bridge

@@ -17,6 +17,12 @@ options:
     timeout: "240s"
   k3s:
     extraArgs:
+      # etcd embedded, R14 target backend (Viviana, 2026-10-01 -- SQLite withdrawn as final):
+      # its metrics on :2381
+      - arg: "--cluster-init"
+        nodeFilters: ["server:0"]
+      - arg: "--etcd-expose-metrics"
+        nodeFilters: ["server:0"]
       - arg: "--disable=traefik"
         nodeFilters: ["server:*"]
       - arg: "--disable=servicelb"

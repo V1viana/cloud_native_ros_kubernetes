@@ -1,4 +1,4 @@
-FROM ros:humble-ros-base
+FROM ros:humble-ros-base AS builder
 
 WORKDIR /ws/src
 COPY integrations/px4_msgs ./px4_msgs
@@ -25,6 +25,23 @@ RUN . /opt/ros/humble/setup.sh && \
     colcon build --merge-install \
       --packages-select px4_event_detector_plugin \
       --cmake-args -DBUILD_TESTING=OFF
+
+# Runtime stage: only /ws/install (colcon's merged build output) and the
+# packages' own *runtime* (exec) dependencies are needed to actually run
+# ros2 launch/lifecycle -- the compiler toolchain, source tree and colcon's
+# build/log directories that made up most of this image's size (2.87GB)
+# are build-time only. Re-resolving deps via rosdep --dependency-types=exec
+# against the same (already-patched) sources, rather than hand-picking apt
+# packages, keeps this in sync with whatever the packages' own package.xml
+# actually declares.
+FROM ros:humble-ros-base
+
+WORKDIR /ws
+COPY --from=builder /ws/src /tmp/src
+RUN apt-get update && \
+    rosdep install --from-paths /tmp/src --ignore-src -r -y --rosdistro humble --dependency-types=exec && \
+    rm -rf /var/lib/apt/lists/* /tmp/src
+COPY --from=builder /ws/install /ws/install
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]

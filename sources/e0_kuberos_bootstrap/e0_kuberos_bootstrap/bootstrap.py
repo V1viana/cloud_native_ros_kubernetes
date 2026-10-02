@@ -53,14 +53,19 @@ def main(args=None):
     parser.add_argument("--manifest-dir", type=Path, required=True)
     parser.add_argument("--kuberos-url", required=True)
     parser.add_argument("--timeout-sec", type=float, default=240.0)
+    # Default of 3 preserves E0's own exact behaviour (and every scenario
+    # that reuses its 3-robot topology, e.g. S4) unchanged; S3's own
+    # scalability sweep is the first caller that ever needs a different
+    # fleet size, so this is additive, not a change to what E0 itself does.
+    parser.add_argument("--expected-count", type=int, default=3)
     parsed = parser.parse_args(args)
     token = os.environ.get("KUBEROS_API_TOKEN", "")
     if not token:
         raise RuntimeError("KUBEROS_API_TOKEN is required")
     paths = list(parsed.manifest_dir.glob("*.yaml"))
-    if len(paths) != 3:
+    if len(paths) != parsed.expected_count:
         raise RuntimeError(
-            f"Expected three E0 manifests, found {len(paths)}"
+            f"Expected {parsed.expected_count} manifests, found {len(paths)}"
         )
     adapter = KuberosAdapter(
         parsed.kuberos_url,

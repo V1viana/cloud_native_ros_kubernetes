@@ -1,0 +1,26 @@
+# RobotFleet: the fourth CRD, exclusive to variant B (proposal S3 -- one of
+# the four "new" Custom Resource Definitions; variant A has no equivalent
+# of its own, KubeROS's own Fleet/Host models are vendored and out of
+# scope). Never actually applied by any scenario runner until now --
+# RobotFleetController itself was live-verified once, in isolation, with a
+# throwaway CR during Fase 2 development (operator/DEV_SMOKE_TEST.md), but
+# nothing since then wired a real one into E0's own 3-drone topology (which
+# S4 and, by reusing run_e0.sh VARIANT=b as their own bootstrap, U1/U2 all
+# share). RobotFleetController itself needs no other change: it already
+# reconciles any RobotFleet object matching ROSModules by spec.robotId, on
+# its own resync timer, independent of whichever scenario created them.
+apiVersion: dronekube.io/v1alpha1
+kind: RobotFleet
+metadata:
+  name: px4-fleet
+  namespace: cloud-native-p2
+spec:
+  robots:
+    - {id: drone01, role: onboard}
+    - {id: drone02, role: onboard}
+    - {id: drone03, role: onboard}
+  # Real node label from manifests/kubernetes/e0/k3d-cloud-native-e0.yaml
+  # (kuberos.io/role=edge), not the proposal's own illustrative "role: edge"
+  # -- this project's own convention namespaces every node-role label.
+  edgeNodeSelector:
+    kuberos.io/role: edge

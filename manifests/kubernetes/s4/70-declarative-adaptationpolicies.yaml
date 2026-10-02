@@ -1,0 +1,65 @@
+# S4 variant B: two of the three concurrent faults are AdaptationPolicy-
+# driven, reusing the exact mechanisms already validated for E2 (telemetry,
+# RestartComponent) and E4 (SLO/broken edge, MigratePlacement+rollback) --
+# no new controller logic, just retargeted to drone02/drone03 on E0's
+# three-drone declarative fleet instead of a single robot. drone01's fault
+# (battery/P0) is deliberately NOT an AdaptationPolicy: P0 stays outside
+# the Fleet Operator's scope, same as E1.
+apiVersion: dronekube.io/v1alpha1
+kind: AdaptationPolicy
+metadata:
+  name: telemetry-heartbeat-s4-drone02
+  namespace: cloud-native-p2
+spec:
+  targetModuleSelector:
+    matchLabels: {app: companion-analytics, robot: drone02}
+  trigger:
+    metric: telemetry_heartbeat_age_sec
+    threshold: 3.0
+    consecutiveWindows: 1
+    windowSec: 5
+  action:
+    type: RestartComponent
+    targetDeploymentSelector:
+      matchLabels: {app.kubernetes.io/name: drone02-microxrce-agent}
+  recovery:
+    metric: telemetry_heartbeat_age_sec
+    threshold: 1.0
+    consecutiveWindows: 3
+  rollback:
+    onReadinessFailureSec: 90
+---
+apiVersion: dronekube.io/v1alpha1
+kind: AdaptationPolicy
+metadata:
+  name: analytics-latency-slo-s4-drone03
+  namespace: cloud-native-p2
+spec:
+  targetModuleSelector:
+    matchLabels: {app: companion-analytics, robot: drone03}
+  trigger:
+    metric: latency_p95_ms
+    threshold: 250
+    consecutiveWindows: 3
+    # 2, not 10, since the A/B temporal contract (V6, docs/CRD_CONTRACT_AUDIT.md):
+    # variant A's detector here uses window_sec 2.0 (manifests/kuberos/e0/
+    # drone-baseline.template.yaml) and the ROSModule's default W is 2.0; with
+    # 10 the controller would report MetricsWindowMismatch and never count.
+    # Runs before the contract used 10 against a rolling p95 and stay recorded so.
+    windowSec: 2
+  # Deliberately broken edge target, same trick as E4
+  # (manifests/kubernetes/p2/60-declarative-workload-e4.yaml):
+  # sample_period_ms declared as an int in companion_analytics/node.py,
+  # "not-a-number" crash-loops the edge instance so it never reaches
+  # Active, forcing the timeout-based rollback path.
+  action:
+    type: MigratePlacement
+    to: edge
+    edgeRosParamMap:
+      sample_period_ms: "not-a-number"
+  recovery:
+    metric: latency_p95_ms
+    threshold: 150
+    consecutiveWindows: 3
+  rollback:
+    onReadinessFailureSec: 30

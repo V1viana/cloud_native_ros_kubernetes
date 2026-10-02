@@ -1,0 +1,231 @@
+# PX4 SITL + uXRCE Agent for all three drones, variant-agnostic
+# infrastructure (same reasoning as manifests/kubernetes/p2/40-shared-infra.
+# yaml). Reuses P2's proven hostNetwork wiring pattern rather than
+# replicating variant A's own per-drone Service-routed XRCE agent
+# (manifests/kuberos/e0/drone-baseline.template.yaml): each drone's PX4
+# still ends up isolated (one onboard node per drone, hostNetwork binds to
+# that node only), and none of E0's actual PASS checks (topic namespacing,
+# PX4 UID/restart invariance, health snapshot) depend on which wiring style
+# got it there. Simplification, not hidden: per-drone PX4_HOME_LAT/LON
+# (variant A gives each drone a distinct simulated position) is not set
+# here -- irrelevant to every check E0 actually makes.
+#
+# nodeSelector pins each pair to its own robot's node (robot.kuberos.io/id,
+# already set by manifests/kubernetes/e0/k3d-cloud-native-e0.yaml) rather
+# than the shared kuberos.io/role=onboard alone: three onboard nodes exist
+# here, one per drone, so the role alone would not guarantee drone01's PX4
+# lands on drone01's node.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-microxrce-agent
+  namespace: cloud-native-p2
+  labels: {app.kubernetes.io/name: drone01-microxrce-agent}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: drone01-microxrce-agent}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: drone01-microxrce-agent}}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {kuberos.io/role: onboard, robot.kuberos.io/id: drone01}
+      containers:
+        - name: agent
+          image: microros/micro-ros-agent:humble
+          imagePullPolicy: IfNotPresent
+          args: ["udp4", "--port", "8888"]
+          env:
+            - {name: ROS_DOMAIN_ID, value: "230"}
+            - {name: RMW_IMPLEMENTATION, value: rmw_fastrtps_cpp}
+            - {name: ROS_DISCOVERY_SERVER, value: "__P2_DISCOVERY_ADDRESS__:11811"}
+          readinessProbe:
+            exec: {command: ["/bin/bash", "-c", "kill -0 1"]}
+            periodSeconds: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone01-px4-sitl
+  namespace: cloud-native-p2
+  labels: {app.kubernetes.io/name: drone01-px4-sitl, cloud-native-robotics.io/criticality: flight-control}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: drone01-px4-sitl}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: drone01-px4-sitl, cloud-native-robotics.io/criticality: flight-control}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {kuberos.io/role: onboard, robot.kuberos.io/id: drone01}
+      containers:
+        - name: px4
+          image: px4io/px4-sitl:latest
+          imagePullPolicy: IfNotPresent
+          workingDir: /opt/px4
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              sed -i "s|uxrce_dds_client start -t udp|uxrce_dds_client start -t udp -h 127.0.0.1|" \
+                /opt/px4/etc/init.d-posix/rcS
+              exec /opt/px4/bin/px4 -d -s /opt/px4/etc/init.d-posix/rcS /opt/px4
+          env:
+            - {name: PX4_SIM_MODEL, value: sihsim_quadx}
+            # Per-robot ROS topic namespace (/drone01/fmu/...): PX4's own
+            # startup script reads this and appends it to the
+            # uxrce_dds_client invocation itself -- confirmed from
+            # manifests/kuberos/e0/drone-baseline.template.yaml, which sets
+            # exactly this env var rather than sed-ing a `-n` flag in by
+            # hand (an earlier draft of this file tried that; wrong, PX4's
+            # own mechanism is this env var, not a client CLI flag added
+            # here).
+            - {name: PX4_UXRCE_DDS_NS, value: drone01}
+            - {name: ROS_DOMAIN_ID, value: "230"}
+          resources:
+            requests: {cpu: 250m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          readinessProbe:
+            exec: {command: ["/bin/sh", "-c", "kill -0 1"]}
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone02-microxrce-agent
+  namespace: cloud-native-p2
+  labels: {app.kubernetes.io/name: drone02-microxrce-agent}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: drone02-microxrce-agent}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: drone02-microxrce-agent}}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {kuberos.io/role: onboard, robot.kuberos.io/id: drone02}
+      containers:
+        - name: agent
+          image: microros/micro-ros-agent:humble
+          imagePullPolicy: IfNotPresent
+          args: ["udp4", "--port", "8888"]
+          env:
+            - {name: ROS_DOMAIN_ID, value: "230"}
+            - {name: RMW_IMPLEMENTATION, value: rmw_fastrtps_cpp}
+            - {name: ROS_DISCOVERY_SERVER, value: "__P2_DISCOVERY_ADDRESS__:11811"}
+          readinessProbe:
+            exec: {command: ["/bin/bash", "-c", "kill -0 1"]}
+            periodSeconds: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone02-px4-sitl
+  namespace: cloud-native-p2
+  labels: {app.kubernetes.io/name: drone02-px4-sitl, cloud-native-robotics.io/criticality: flight-control}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: drone02-px4-sitl}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: drone02-px4-sitl, cloud-native-robotics.io/criticality: flight-control}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {kuberos.io/role: onboard, robot.kuberos.io/id: drone02}
+      containers:
+        - name: px4
+          image: px4io/px4-sitl:latest
+          imagePullPolicy: IfNotPresent
+          workingDir: /opt/px4
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              sed -i "s|uxrce_dds_client start -t udp|uxrce_dds_client start -t udp -h 127.0.0.1|" \
+                /opt/px4/etc/init.d-posix/rcS
+              exec /opt/px4/bin/px4 -d -s /opt/px4/etc/init.d-posix/rcS /opt/px4
+          env:
+            - {name: PX4_SIM_MODEL, value: sihsim_quadx}
+            - {name: PX4_UXRCE_DDS_NS, value: drone02}
+            - {name: ROS_DOMAIN_ID, value: "230"}
+          resources:
+            requests: {cpu: 250m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          readinessProbe:
+            exec: {command: ["/bin/sh", "-c", "kill -0 1"]}
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone03-microxrce-agent
+  namespace: cloud-native-p2
+  labels: {app.kubernetes.io/name: drone03-microxrce-agent}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: drone03-microxrce-agent}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: drone03-microxrce-agent}}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {kuberos.io/role: onboard, robot.kuberos.io/id: drone03}
+      containers:
+        - name: agent
+          image: microros/micro-ros-agent:humble
+          imagePullPolicy: IfNotPresent
+          args: ["udp4", "--port", "8888"]
+          env:
+            - {name: ROS_DOMAIN_ID, value: "230"}
+            - {name: RMW_IMPLEMENTATION, value: rmw_fastrtps_cpp}
+            - {name: ROS_DISCOVERY_SERVER, value: "__P2_DISCOVERY_ADDRESS__:11811"}
+          readinessProbe:
+            exec: {command: ["/bin/bash", "-c", "kill -0 1"]}
+            periodSeconds: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone03-px4-sitl
+  namespace: cloud-native-p2
+  labels: {app.kubernetes.io/name: drone03-px4-sitl, cloud-native-robotics.io/criticality: flight-control}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: drone03-px4-sitl}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: drone03-px4-sitl, cloud-native-robotics.io/criticality: flight-control}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector: {kuberos.io/role: onboard, robot.kuberos.io/id: drone03}
+      containers:
+        - name: px4
+          image: px4io/px4-sitl:latest
+          imagePullPolicy: IfNotPresent
+          workingDir: /opt/px4
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              sed -i "s|uxrce_dds_client start -t udp|uxrce_dds_client start -t udp -h 127.0.0.1|" \
+                /opt/px4/etc/init.d-posix/rcS
+              exec /opt/px4/bin/px4 -d -s /opt/px4/etc/init.d-posix/rcS /opt/px4
+          env:
+            - {name: PX4_SIM_MODEL, value: sihsim_quadx}
+            - {name: PX4_UXRCE_DDS_NS, value: drone03}
+            - {name: ROS_DOMAIN_ID, value: "230"}
+          resources:
+            requests: {cpu: 250m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          readinessProbe:
+            exec: {command: ["/bin/sh", "-c", "kill -0 1"]}
+            periodSeconds: 5

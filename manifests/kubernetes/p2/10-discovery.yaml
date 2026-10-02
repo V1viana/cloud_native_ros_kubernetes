@@ -37,6 +37,26 @@ spec:
             - name: discovery
               containerPort: 11811
               protocol: UDP
+          # Had no resources at all until found live at S3 N=20: this
+          # process shares its node with the whole control-plane stack
+          # (KubeROS API/Celery, audit-writer, dispatcher, ...), which
+          # gets busier as bootstrap progresses, and with zero CPU request
+          # it had no scheduling priority at all -- observed live using
+          # ~795m of a single core while its own log flooded with ~8400
+          # "DISCOVERY_DATABASE Error: Matching unexisting participant"
+          # entries over one run's ~66 minutes. Request set to what it was
+          # already observed trying to use, not a guess; limit left with
+          # headroom in case the bottleneck is partly about being starved
+          # rather than a hard single-core ceiling -- not yet proven
+          # either way, this is the additive, low-risk experiment to run
+          # before concluding it's the latter.
+          resources:
+            requests:
+              cpu: "1"
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 512Mi
           readinessProbe:
             exec:
               command: ["/bin/bash", "-c", "kill -0 1"]

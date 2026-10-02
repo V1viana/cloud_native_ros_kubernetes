@@ -1,155 +1,102 @@
 # Cloud-Native ROS 2 and Kubernetes
 
 Piattaforma sperimentale per orchestrare workload robotici ROS 2 e PX4 su
-Kubernetes, combinando KubeROS con il pattern event-driven di RobotKube.
+Kubernetes. Il repository contiene due varianti dello stesso sistema, che
+condividono simulatore, workload e scenari:
 
-Il sistema separa le reazioni safety che devono restare sul drone dalle
-operazioni cloud-native coordinate dal control plane. La topologia di
-riferimento comprende tre nodi onboard, un nodo edge e un control plane nello
-stesso cluster Kubernetes multi-node.
+- **Variante A, imperativa.** Un Event Detector pubblica eventi operativi, un
+  Dispatcher li trasforma in richieste ROS 2 Action e un Application Manager
+  esegue l'azione tramite KubeROS e le API Kubernetes.
+- **Variante B, dichiarativa.** Lo stato della flotta e' descritto da quattro
+  risorse Kubernetes (`RobotFleet`, `ROSModule`, `ROSLifecyclePolicy`,
+  `AdaptationPolicy`), riconciliate da un Fleet Operator. Un sidecar State
+  Bridge collega ogni modulo ROS 2 allo stato della sua risorsa.
 
-## Architettura
+In entrambe le varianti la reazione di sicurezza alla batteria bassa resta sul
+drone e non dipende dal control plane.
 
-![Architettura distribuita](docs/diagrams/DISTRIBUTED_ARCHITECTURE.png)
+## Componenti
 
-### Onboard, uno stack per drone
+| Piano | Componenti |
+| --- | --- |
+| Onboard, uno per drone | PX4 SITL, Micro XRCE-DDS Agent, Event Detector con le regole PX4, Companion Analytics |
+| Control plane, variante A | KubeROS, Operational Event Dispatcher, Application Manager |
+| Control plane, variante B | Fleet Operator e risorse `dronekube.io/v1alpha1` |
+| Control plane, comuni | Fast DDS Discovery Server, Audit Writer, Operator Notifier, Platform Observer |
+| Edge | Companion Analytics migrato, con HPA |
 
-- PX4 SITL esegue la missione simulata.
-- Micro XRCE-DDS Agent collega PX4 al dominio ROS 2.
-- RobotKube Event Detector esegue i plugin PX4 locali.
-- Companion Analytics rappresenta un modulo ROS 2 non critico e migrabile.
-- La regola `BatteryLow` puo' inviare RTL localmente anche senza control plane.
+Il diagramma in [docs/diagrams](docs/diagrams/DISTRIBUTED_ARCHITECTURE.png)
+mostra la variante A. Il Fleet Operator e le risorse della variante B sono
+descritti in [operator/README.md](operator/README.md).
 
-### Control plane
+## Scenari
 
-- KubeROS registra fleet, robot e nodi e gestisce deploy, configurazione,
-  placement, update e rollback dei moduli ROS 2.
-- Operational Event Dispatcher traduce gli eventi normalizzati in richieste ROS
-  2 Action.
-- Cloud-Native Application Manager applica le policy P0, P1 e P2, coordina
-  KubeROS o le API Kubernetes e verifica la convergenza.
-- Audit Writer, Operator Notifier e Platform Observer conservano outcome,
-  notifiche e metriche.
-- Fast DDS Discovery Server supporta la discovery ROS 2 tra i nodi.
+| ID | Scenario | Runner |
+| --- | --- | --- |
+| E0 | Flotta nominale, nessun guasto | `scripts/run_e0.sh` |
+| E1 | Batteria bassa con control plane non raggiungibile | `scripts/run_e1.sh` |
+| E2 | Perdita della telemetria | `scripts/run_e2.sh` |
+| P2 | Latenza di analytics oltre soglia, migrazione verso l'edge | `scripts/run_p2.sh` |
+| E4 | Migrazione fallita, ritorno onboard | `scripts/run_e4.sh` |
+| U1, U2 | Aggiornamento di un modulo, aggiornamento non valido | `scripts/run_u1.sh`, `scripts/run_u2.sh` |
+| S1 | Modifica fuori banda di un Deployment gestito | `scripts/run_s1.sh` |
+| S2 | Transitorio dentro una partizione di rete | `scripts/run_s2.sh` |
+| S3 | Scala della flotta | `scripts/run_s3.sh` |
+| S4 | Guasti concorrenti | `scripts/run_s4_matrix.sh` |
+| TTR | Ricostruzione della flotta da cluster vuoto | `scripts/ttr/run_ttr.sh` |
 
-### Edge
+I runner creano un cluster k3d, costruiscono e importano le immagini, eseguono
+lo scenario e salvano gli output in `results/`, che non e' versionata. La
+variante si sceglie con `VARIANT=a` oppure `VARIANT=b`:
 
-Il nodo edge ospita workload trasferiti dallo stack onboard, come Companion
-Analytics, e puo' applicare scaling tramite HPA. Non contiene un secondo piano
-decisionale.
-
-## Ruolo Dei Framework
-
-**KubeROS** fornisce il livello ROS-aware per fleet, deployment, parametri,
-placement e aggiornamenti selettivi. La copia in `integrations/kuberos` include
-il supporto sviluppato per workload `Deployment`, revisioni e rollback.
-
-**RobotKube** fornisce il modello event-driven e il core Event Detector a
-plugin. Il runtime usa realmente il core upstream in
-`integrations/robotkube/event_detector`, esteso dal package
-`sources/px4_event_detector_plugin`.
-
-**Kubernetes** riconcilia lo stato dei workload e fornisce Deployment, Job,
-Service, ConfigMap, probe, HPA, PVC, Event API e RBAC.
-
-Il componente in `sources/cloud_native_application_manager` e' una
-implementazione originale del progetto ispirata al pattern RobotKube. Il
-repository Application Manager upstream resta fissato in `integrations` come
-riferimento e non rappresenta il manager eseguito da questa architettura.
-
-## Pipeline Event-Driven
-
-```text
-PX4 / metriche ROS 2
-        |
-        v
-Event Detector + plugin PX4
-        |
-        v
-OperationalEvent topic
-        |
-        v
-Event Dispatcher
-        |
-        v
-DeploymentRequest action
-        |
-        v
-Application Manager
-        |
-        +--> KubeROS REST API
-        +--> Kubernetes API
-        |
-        v
-verifica outcome, audit e notifica
+```bash
+VARIANT=b scripts/run_p2.sh
+N_ROBOTS=3 VARIANT=a scripts/run_s3.sh
 ```
 
-## Scenari Disponibili
-
-| ID | Scenario | Comportamento verificato |
-| --- | --- | --- |
-| E0 | Baseline a tre droni | Deploy KubeROS e continuita nominale |
-| E1 | Batteria bassa | RTL onboard durante indisponibilita del control plane |
-| E2 / P1 | Perdita telemetria | Restart del solo Agent e Job diagnostico |
-| P2 | Latenza analytics | Migrazione del modulo verso il nodo edge |
-| E4 | Remediation fallita | Rollback automatico verso analytics onboard |
-| U1 | Update KubeROS | Aggiornamento differenziale di un singolo modulo |
-| U2 | Update non valido | Rifiuto della revisione e ripristino della precedente |
-
-Le procedure si trovano nei README sotto `manifests/kubernetes/`. Gli script
-salvano gli output locali in `results/`, che non vengono versionati.
+`scripts/run_campaign.sh` ripete gli scenari di base per le due varianti.
 
 ## Struttura
 
 ```text
-cloud_native_ros_kubernetes/
-|-- config/          configurazioni e lock delle immagini
-|-- containers/      Dockerfile dei componenti eseguiti
-|-- docs/            architettura, stato, gap analysis e provenienza
-|-- integrations/    KubeROS adattato e dipendenze upstream fissate
-|-- interfaces/      messaggi, Service e Action ROS 2
-|-- manifests/       input KubeROS e risorse Kubernetes native
-|-- patches/         patch riproducibili per dipendenze upstream
-|-- results/         output runtime locali, esclusi da Git
-|-- scripts/         build, deploy, fault injection e raccolta dati
-`-- sources/         componenti ROS 2 e servizi del control plane
+config/          catalogo e lock delle immagini, soglie
+containers/      Dockerfile dei componenti
+docs/            specifica, campagna, gap analysis, immagini e provenienza
+integrations/    KubeROS adattato e dipendenze upstream fissate
+interfaces/      messaggi, Service e Action ROS 2
+manifests/       risorse Kubernetes e input KubeROS degli scenari
+operator/        Fleet Operator, CRD e RBAC della variante B
+patches/         patch per le dipendenze upstream
+scripts/         runner degli scenari, osservatori e giudici
+sources/         componenti ROS 2 e servizi del control plane
 ```
 
 ## Documentazione
 
 - [Specifica architetturale](docs/SPECIFICA_ARCHITETTURALE.md)
-- [Stato implementativo](docs/IMPLEMENTATION_STATUS.md)
-- [Gap analysis](docs/GAP_ANALYSIS.md)
-- [Campagna e scenari](docs/EXPERIMENT_CAMPAIGN.md)
-- [Risultati validati](results/README.md)
+- [Scenari e campagna sperimentale](docs/EXPERIMENT_CAMPAIGN.md)
+- [Gap analysis: riuso, adattamenti e componenti nuovi](docs/GAP_ANALYSIS.md)
+- [Immagini di progetto e registry](docs/IMAGE_REGISTRY.md)
 - [Provenienza dei componenti](docs/THIRD_PARTY_PROVENANCE.md)
-- [Workflow immagini e registry](docs/IMAGE_REGISTRY.md)
-- [Diagramma Mermaid](docs/diagrams/DISTRIBUTED_ARCHITECTURE.mmd)
 
-## Dipendenze
+## Requisiti
 
-Dopo il clone inizializzare i submodule upstream:
+Docker, k3d, kubectl e Python 3. Dopo il clone inizializzare i submodule:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-KubeROS e' versionato direttamente in `integrations/kuberos` per conservare gli
-adattamenti del progetto. Le dipendenze RobotKube e PX4 sono fissate nei
-submodule dichiarati in `.gitmodules`.
+## Componenti di terze parti
 
-## Avvio Degli Scenari
+KubeROS e' incluso in `integrations/kuberos` con gli adattamenti del progetto.
+Event Detector, Application Manager, Perception Interfaces e PX4 Messages sono
+submodule fissati a un commit. Origine, licenze e modifiche sono elencate in
+[docs/THIRD_PARTY_PROVENANCE.md](docs/THIRD_PARTY_PROVENANCE.md) e in
+[integrations/README.md](integrations/README.md).
 
-Ogni scenario dispone di una procedura dedicata. Per esempio:
+## Licenza
 
-```bash
-scripts/run_e0.sh
-scripts/run_e1.sh
-scripts/run_e2.sh
-scripts/run_p2.sh
-scripts/run_e4.sh
-```
-
-I runner richiedono Docker, k3d, kubectl e un ambiente ROS 2 compatibile. Le
-variabili `RESET_E0`, `RESET_P2` e le equivalenti degli altri scenari
-controllano la ricreazione deliberata dei rispettivi cluster.
+Il codice del progetto e' distribuito con licenza Apache 2.0: vedere
+[LICENSE](LICENSE) e [NOTICE](NOTICE). I componenti di terze parti mantengono
+la propria licenza.

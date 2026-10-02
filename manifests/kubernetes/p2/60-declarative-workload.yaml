@@ -1,0 +1,65 @@
+# Variant B's ROSModule + AdaptationPolicy for the P2 scenario, replacing
+# variant A's analytics-event-detector-p2 + self-activating companion-
+# analytics-onboard (both in 40-workload.yaml) with the declarative
+# control plane. Trigger/recovery thresholds match variant A's Event
+# Detector rule exactly (see 40-workload.yaml's p2-event-detector-config
+# ConfigMap: violation_threshold_ms=250, recovery_threshold_ms=150,
+# consecutive_windows=3) so the comparison is on the mechanism, not on
+# different business thresholds.
+#
+# Windows: since the A/B temporal contract (V6, docs/CRD_CONTRACT_AUDIT.md)
+# the State Bridge closes tumbling p95 windows of W = spec.metricsWindowSec
+# (default 2.0, variant A's window_sec) exactly as A's detector does, and
+# AdaptationController counts each closed window once, ticking every 1s. Until
+# then B used a 10s rolling p95 read every 5s, so 3 "windows" took roughly 15s
+# instead of A's ~6s: the runs before the contract measured that configuration
+# and stay recorded with it.
+apiVersion: dronekube.io/v1alpha1
+kind: ROSModule
+metadata:
+  name: companion-analytics-drone01
+  namespace: cloud-native-p2
+  labels: {app: companion-analytics, robot: drone01}
+spec:
+  robotId: drone01
+  package: companion_analytics
+  lifecycleTarget: Active
+  placement: onboard
+  rosParamMap:
+    processing_delay_ms: "__ONBOARD_PROCESSING_DELAY_MS__"
+    queue_depth: "12"
+    cpu_percent: "85.0"
+    sample_period_ms: "250"
+  # First real exercise of the proposal's readiness model (S3): State
+  # Bridge gates Inactive -> Active on this until a message arrives here
+  # (ROSLifecyclePolicy default-lifecycle-policy's requireReadinessBeforeActive,
+  # true unless a policy object says otherwise).
+  probes:
+    readiness:
+      topic: /drone01/analytics/health
+      timeoutSec: 5
+---
+apiVersion: dronekube.io/v1alpha1
+kind: AdaptationPolicy
+metadata:
+  name: analytics-latency-slo
+  namespace: cloud-native-p2
+spec:
+  targetModuleSelector:
+    matchLabels: {app: companion-analytics}
+  trigger:
+    metric: latency_p95_ms
+    threshold: 250
+    consecutiveWindows: 3
+    windowSec: 2
+  action:
+    type: MigratePlacement
+    to: edge
+    edgeRosParamMap:
+      processing_delay_ms: "80.0"
+  recovery:
+    metric: latency_p95_ms
+    threshold: 150
+    consecutiveWindows: 3
+  rollback:
+    onReadinessFailureSec: __P2_GOAL_TIMEOUT_SEC__

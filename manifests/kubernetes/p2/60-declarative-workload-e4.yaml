@@ -1,0 +1,61 @@
+# Variant B's E4 (remediation fallita -> rollback) equivalent of
+# 60-declarative-workload.yaml. Same trigger as P2 (onboard at 300ms,
+# above the 250ms threshold), but action.edgeRosParamMap deliberately
+# breaks the edge instance instead of giving it a faster profile.
+#
+# Since R9 (Viviana, 2026-09-26) variant A's E4 uses the same fault
+# (manifests/kuberos/e4/analytics-edge-invalid-parameter.yaml):
+# sample_period_ms is declared as an int in companion_analytics/node.py
+# (default 250), and a non-numeric override makes rclpy reject it at startup
+# with InvalidParameterTypeException, crash-looping the container, so the
+# edge never becomes ready (the mechanism found live as bug #9). A's earlier
+# fault, a readinessProbe that always fails, would be seen here too:
+# AdaptationController judges the edge on a current Ready Pod joined with a
+# fresh Active record (lifecycle_controller.module_lifecycle_summary), not on
+# the lifecycle record alone. rollback.onReadinessFailureSec comes from the
+# same GOAL_TIMEOUT_SEC as A's goal timeout (45s in scripts/run_p2.sh e4
+# mode); it was a fixed 30s, chosen only to keep the test fast. Origins
+# differ: B counts from migratingSince (the tick that creates the edge), A
+# from the start of the goal's execution in the Application Manager.
+apiVersion: dronekube.io/v1alpha1
+kind: ROSModule
+metadata:
+  name: companion-analytics-drone01
+  namespace: cloud-native-p2
+  labels: {app: companion-analytics, robot: drone01}
+spec:
+  robotId: drone01
+  package: companion_analytics
+  lifecycleTarget: Active
+  placement: onboard
+  rosParamMap:
+    processing_delay_ms: "__ONBOARD_PROCESSING_DELAY_MS__"
+    queue_depth: "12"
+    cpu_percent: "85.0"
+    sample_period_ms: "250"
+---
+apiVersion: dronekube.io/v1alpha1
+kind: AdaptationPolicy
+metadata:
+  name: analytics-latency-slo
+  namespace: cloud-native-p2
+spec:
+  targetModuleSelector:
+    matchLabels: {app: companion-analytics}
+  trigger:
+    metric: latency_p95_ms
+    threshold: 250
+    consecutiveWindows: 3
+    windowSec: 2
+  action:
+    type: MigratePlacement
+    to: edge
+    edgeRosParamMap:
+      processing_delay_ms: "80.0"
+      sample_period_ms: "not-a-number"
+  recovery:
+    metric: latency_p95_ms
+    threshold: 150
+    consecutiveWindows: 3
+  rollback:
+    onReadinessFailureSec: __P2_GOAL_TIMEOUT_SEC__

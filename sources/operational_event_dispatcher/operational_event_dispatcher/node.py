@@ -11,6 +11,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 
 from .dispatcher_core import DispatchAdmission
+from .event_trace import EventTrace
 
 
 class OperationalEventDispatcherNode(Node):
@@ -26,6 +27,9 @@ class OperationalEventDispatcherNode(Node):
 
         cache_size = int(self.get_parameter("incident_cache_size").value)
         self._admission = DispatchAdmission(cache_size=cache_size)
+        # S2 only (OPERATIONAL_EVENT_TRACE=1): every arrival and its admission,
+        # to stdout; off by default, where nothing is written (event_trace.py).
+        self._event_trace = EventTrace.from_env(self.get_logger())
         self._callback_group = ReentrantCallbackGroup()
         action_name = self.get_parameter("action_name").value
         self._action_client = ActionClient(
@@ -54,11 +58,14 @@ class OperationalEventDispatcherNode(Node):
         )
 
     def _on_event(self, event):
-        if not self._admission.claim(
+        self._event_trace.received(event)
+        claimed = self._admission.claim(
             event.correlation_id,
             event.event_type,
             event.state,
-        ):
+        )
+        self._event_trace.admission(event, claimed)
+        if not claimed:
             return
         timeout = float(self.get_parameter("server_timeout_sec").value)
         if not self._action_client.wait_for_server(timeout_sec=timeout):

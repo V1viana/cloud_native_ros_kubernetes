@@ -1,0 +1,75 @@
+# S4 variant A's own dedicated Application Manager ServiceAccount/Role,
+# separate from manifests/kubernetes/p2/00-rbac.yaml's own
+# cloud-native-application-manager (used by E0/E1/E4/P2's application-
+# manager-p2) -- P1 remediation (RestartComponent-equivalent: patch/replace
+# a Deployment, create a diagnostic Job) is never exercised by any of those
+# scenarios, so p2/00-rbac.yaml's existing Role deliberately never grants
+# it. Mirrors manifests/kubernetes/e2/stack.yaml's own dedicated
+# cloud-native-application-manager Role for the same reason (E2 also needed
+# P1, also via its own separate ServiceAccount+Role rather than widening a
+# shared one).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: application-manager-s4
+  namespace: cloud-native-p2
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: application-manager-s4
+  namespace: cloud-native-p2
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  # restore_telemetry (P1) only ever patches drone02's own Agent Deployment
+  # in this scenario -- scoped to that one resource, same discipline as
+  # e2/stack.yaml's own Role scoped to drone01-microxrce-agent there.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["drone02-microxrce-agent"]
+    verbs: ["patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "create", "patch", "delete"]
+  - apiGroups: ["events.k8s.io"]
+    resources: ["events"]
+    verbs: ["get", "list", "create", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: application-manager-s4
+  namespace: cloud-native-p2
+subjects:
+  - kind: ServiceAccount
+    name: application-manager-s4
+    namespace: cloud-native-p2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: application-manager-s4
+---
+# Pre-seeded like manifests/kubernetes/p2/00-rbac.yaml's own
+# analytics-routing-drone01 and manifests/kubernetes/e0/30-bootstrap.yaml's
+# analytics-routing-drone02/03: only drone03 runs the SLO/edge-migration
+# fault in S4, but the ConfigMap name is per-robot, so it needs its own copy
+# here (drone01/drone02 never touch analytics routing at all in S4).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: analytics-routing-drone03
+  namespace: cloud-native-p2
+data:
+  active_instance: onboard
+  correlation_id: ""

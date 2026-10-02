@@ -121,14 +121,25 @@ rosModules:
     entrypoint:
       - |-
         exec ros2 launch event_detector event_detector.launch.py name:=event_detector namespace:=/__ROBOT_ID__ params:=/etc/event-detector/event-detector-__ROBOT_ID__.yaml log_level:=info
+    # Bug #66: `setsid` keeps the ros2 daemon the CLI may spawn out of the
+    # timeout's process group, so a deadline never signals (and poisons) it.
     startupProbe:
       exec:
         command:
           - /bin/bash
-          - -lc
+          - -c
           - |-
-            source /ws/install/setup.bash
-            ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /__ROBOT_ID__/event_detector | grep -q active
+            probe_deadline=3
+            raw=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 timeout -k 1 "$probe_deadline" /bin/bash -c 'source /ws/install/setup.bash && exec setsid ros2 lifecycle get /__ROBOT_ID__/event_detector')
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              case "$rc" in
+                124|137) printf 'Lifecycle probe deadline/SIGKILL (rc=%s, budget %ss)\n' "$rc" "$probe_deadline" >&2 ;;
+                *) printf 'Lifecycle probe RPC/setup failed (rc=%s)\n' "$rc" >&2 ;;
+              esac
+              exit 1
+            fi
+            [ "${raw%% *}" = "active" ] || { printf 'Lifecycle probe expected active, got: %s\n' "$raw" >&2; exit 1; }
       periodSeconds: 4
       timeoutSeconds: 5
       failureThreshold: 30
@@ -165,36 +176,48 @@ rosModules:
         trap 'kill -TERM "$child"; wait "$child"' TERM INT
         lifecycle_node=/__ROBOT_ID__/companion_analytics_onboard
         for attempt in $(seq 1 30); do
-          lifecycle_state=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get "$lifecycle_node" 2>/dev/null | tail -n 1 || true)
+          raw=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 timeout -k 1 10 setsid ros2 lifecycle get "$lifecycle_node" | tail -n 1 || true)
+          lifecycle_state="${raw%% *}"
           case "$lifecycle_state" in
-            *unconfigured*)
-              ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle set "$lifecycle_node" configure || true
+            unconfigured)
+              ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 timeout -k 1 10 setsid ros2 lifecycle set "$lifecycle_node" configure || true
               ;;
-            *inactive*)
-              ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle set "$lifecycle_node" activate || true
+            inactive)
+              ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 timeout -k 1 10 setsid ros2 lifecycle set "$lifecycle_node" activate || true
               ;;
-            *active*)
+            active)
               break
               ;;
           esac
           sleep 1
         done
-        lifecycle_state=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get "$lifecycle_node" 2>/dev/null | tail -n 1 || true)
-        if [[ "$lifecycle_state" != *active* ]]; then
-          echo "Failed to activate $lifecycle_node; last state: $lifecycle_state" >&2
+        raw=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 timeout -k 1 10 setsid ros2 lifecycle get "$lifecycle_node" | tail -n 1 || true)
+        if [[ "${raw%% *}" != "active" ]]; then
+          echo "Failed to activate $lifecycle_node; last state: $raw" >&2
           kill -TERM "$child"
           wait "$child" || true
           exit 1
         fi
         wait "$child"
+    # Bug #66: `setsid` keeps the ros2 daemon the CLI may spawn out of the
+    # timeout's process group, so a deadline never signals (and poisons) it.
     startupProbe:
       exec:
         command:
           - /bin/bash
-          - -lc
+          - -c
           - |-
-            source /ws/install/setup.bash
-            ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 ros2 lifecycle get /__ROBOT_ID__/companion_analytics_onboard | grep -q active
+            probe_deadline=3
+            raw=$(ROS_SUPER_CLIENT=TRUE ROS2CLI_DISABLE_DAEMON=1 timeout -k 1 "$probe_deadline" /bin/bash -c 'source /ws/install/setup.bash && exec setsid ros2 lifecycle get /__ROBOT_ID__/companion_analytics_onboard')
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              case "$rc" in
+                124|137) printf 'Lifecycle probe deadline/SIGKILL (rc=%s, budget %ss)\n' "$rc" "$probe_deadline" >&2 ;;
+                *) printf 'Lifecycle probe RPC/setup failed (rc=%s)\n' "$rc" >&2 ;;
+              esac
+              exit 1
+            fi
+            [ "${raw%% *}" = "active" ] || { printf 'Lifecycle probe expected active, got: %s\n' "$raw" >&2; exit 1; }
       periodSeconds: 3
       timeoutSeconds: 5
       failureThreshold: 30

@@ -1,0 +1,41 @@
+# S3's own single incident (variant B): a successful SLO migration on
+# drone01, same parameters as P2's own AdaptationPolicy -- S3 measures
+# reaction/recovery time and control-plane load *under N-robot load*, not
+# rollback correctness (already covered by E4/S4), so this is the
+# clean-success case, not a deliberately broken edge target.
+apiVersion: dronekube.io/v1alpha1
+kind: AdaptationPolicy
+metadata:
+  name: analytics-latency-slo-s3-drone01
+  namespace: cloud-native-s3
+spec:
+  targetModuleSelector:
+    matchLabels: {app: companion-analytics, robot: drone01}
+  trigger:
+    metric: latency_p95_ms
+    threshold: 250
+    consecutiveWindows: 3
+    # 2, not 10, since the A/B temporal contract (V6, docs/CRD_CONTRACT_AUDIT.md):
+    # variant A's detector here uses window_sec 2.0 (manifests/kuberos/e0/
+    # drone-baseline.template.yaml) and the ROSModule's default W is 2.0; with
+    # 10 the controller would report MetricsWindowMismatch and never count.
+    # Runs before the contract used 10 against a rolling p95 and stay recorded so.
+    windowSec: 2
+  action:
+    type: MigratePlacement
+    to: edge
+    # Without this, the edge instance inherits onboard's own elevated
+    # processing_delay_ms verbatim (the same value that triggered the
+    # migration in the first place) -- found live: its own latency_p95_ms
+    # then never drops below the recovery threshold, so the policy never
+    # leaves Migrating. Matches manifests/kubernetes/p2/60-declarative-
+    # workload.yaml's own AdaptationPolicy, which sets this for the same
+    # reason.
+    edgeRosParamMap:
+      processing_delay_ms: "80.0"
+  recovery:
+    metric: latency_p95_ms
+    threshold: 150
+    consecutiveWindows: 3
+  rollback:
+    onReadinessFailureSec: 60

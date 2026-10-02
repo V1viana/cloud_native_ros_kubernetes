@@ -16,6 +16,18 @@ class Phase(Enum):
     COMPLETE = "complete"
 
 
+def effective_startup_delay(startup_delay_sec, start_at_utc, started_utc):
+    """The delay before the low phase. start_at_utc > 0 (additive, for S4's common
+    instant T0): the low phase starts at that absolute UTC -- the node's clock is
+    the system clock -- and must still be ahead; otherwise E1's relative delay."""
+    if start_at_utc <= 0.0:
+        return startup_delay_sec
+    delay = start_at_utc - started_utc
+    if delay <= 0.0:
+        raise ValueError(f"start_at_utc {start_at_utc} is not ahead of the start ({started_utc})")
+    return delay
+
+
 class BatteryFaultHarness(Node):
     """Publish deterministic samples while recording PX4 command outcomes."""
 
@@ -30,6 +42,7 @@ class BatteryFaultHarness(Node):
             "vehicle_status_topic", "/fmu/out/vehicle_status_v4"
         )
         self.declare_parameter("startup_delay_sec", 15.0)
+        self.declare_parameter("start_at_utc", 0.0)
         self.declare_parameter("low_duration_sec", 8.0)
         self.declare_parameter("recovery_duration_sec", 4.0)
         self.declare_parameter("publish_frequency_hz", 10.0)
@@ -57,6 +70,10 @@ class BatteryFaultHarness(Node):
             )
 
         self._started_ns = self.get_clock().now().nanoseconds
+        self._start_at_utc = self._float_parameter("start_at_utc")
+        self._startup_delay_sec = effective_startup_delay(
+            self._startup_delay_sec, self._start_at_utc, self._started_ns / 1e9
+        )
         self._phase = Phase.WAITING
         self._command_observed = False
         self._ack_observed = False
@@ -86,7 +103,11 @@ class BatteryFaultHarness(Node):
             qos_profile_sensor_data,
         )
         self._timer = self.create_timer(1.0 / frequency_hz, self._tick)
-        self._log_marker("E1_HARNESS_READY")
+        self._log_marker(
+            "E1_HARNESS_READY",
+            start_at_utc=self._start_at_utc,
+            startup_delay_sec=round(self._startup_delay_sec, 3),
+        )
 
     def _float_parameter(self, name):
         return float(self.get_parameter(name).value)

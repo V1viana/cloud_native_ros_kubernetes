@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleet-operator
+  namespace: dronekube-operator
+  labels:
+    app: fleet-operator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: fleet-operator
+  template:
+    metadata:
+      labels:
+        app: fleet-operator
+    spec:
+      serviceAccountName: fleet-operator
+      containers:
+        - name: fleet-operator
+          image: cloud-native-ros/fleet-operator:dev
+          imagePullPolicy: IfNotPresent
+          # Found live: without an explicit scope, Kopf falls back to
+          # cluster-wide watches (the FutureWarning seen in every local run
+          # since day one) -- silently fine with admin kubeconfig
+          # credentials, but the fleet-operator ServiceAccount's Role is
+          # namespaced (RBAC minimo, no cluster-admin), so a cluster-wide
+          # LIST/WATCH is a genuine 403, not just a deprecation notice.
+          #
+          # Both command and args are required: the Dockerfile has no
+          # ENTRYPOINT, only CMD, so CMD is the whole binary+args together --
+          # args: alone (no command:) replaces the entire CMD and Kubernetes
+          # tries to exec "run" itself as the binary. Found live.
+          command: ["kopf"]
+          args: ["run", "--standalone", "--namespace=dronekube-operator", "-m", "fleet_operator.handlers"]
+          # Optional, unset here on purpose: this dev cluster has no shared
+          # discovery server, so ROSModuleController falls back to plain
+          # multicast DDS discovery (k8s_workloads.py::_dds_env_vars).
+          # A scenario that reuses the real P2 topology (Fast DDS Discovery
+          # Server, manifests/kubernetes/p2/10-discovery.yaml) needs both
+          # set, so every Deployment the operator creates joins that same
+          # DDS domain instead of being invisible to PX4/uXRCE:
+          # env:
+          #   - name: ROS_DISCOVERY_SERVER_ADDRESS
+          #     value: "<node-internal-ip>"
+          #   - name: ROS_DOMAIN_ID
+          #     value: "230"

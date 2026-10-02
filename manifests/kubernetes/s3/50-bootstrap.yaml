@@ -1,0 +1,77 @@
+# S3's own KubeROS submission Job -- same mechanism as manifests/kubernetes/
+# e0/30-bootstrap.yaml (identical e0_kuberos_bootstrap binary, additively
+# extended with an --expected-count flag so it accepts a fleet size other
+# than E0's own fixed 3 -- see sources/e0_kuberos_bootstrap's own comment),
+# pointed at S3's own N-robot rendered manifests and __S3_N_ROBOTS__ count.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: s3-kuberos-bootstrap
+  namespace: cloud-native-s3
+spec:
+  # backoffLimit: 0, not 1 -- found live that a retry here never helps:
+  # e0_kuberos_bootstrap has no checkpointing, so a second attempt always
+  # fails instantly on "DeploymentAlreadyExists" for drone01 (already
+  # created by attempt 1), wasting a pod and confusing the logs rather
+  # than actually recovering. Better to fail cleanly on the one attempt
+  # and put the effort into --timeout-sec/activeDeadlineSeconds below
+  # being generous enough that attempt 1 succeeds.
+  backoffLimit: 0
+  # 600s/1800s (were tuned for E0's fixed 3 robots) were found live to be
+  # too tight at N=20: a single robot occasionally needs its startup
+  # probe's own restart-and-retry cycle (up to ~400s, see
+  # loosen_startup_probes() in render_s3_imperative_manifests.py), which
+  # can push that one robot's own KubeROS readiness wait past 600s even
+  # though it eventually comes up healthy.
+  # 3600s itself found live to be too tight once the real SQLite
+  # write-lock bug (KUBEROS_SQLITE_TIMEOUT, integrations/kuberos/kuberos/
+  # settings/base.py) stopped masking this: ros2's own DDS discovery
+  # overhead genuinely grows with N (measured live: ~1.3s for a plain
+  # `ros2 node list` at N~3, up to ~2.3-2.8s at N~15), so the CUMULATIVE
+  # per-robot readiness wait across 20 robots -- individually still fine,
+  # per-robot timeout above unchanged -- can exceed the job's own overall
+  # deadline even though no single robot fails outright. This is the
+  # control-latency-vs-N scaling S3 exists to measure, not a bug to
+  # engineer away -- widened only to let a full N=20 run actually finish
+  # so that number can be collected and reported, not hidden by a job
+  # abort.
+  activeDeadlineSeconds: 5400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: s3-kuberos-bootstrap
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      nodeSelector:
+        kuberos.io/role: control_plane
+      containers:
+        - name: bootstrap
+          image: cloud-native-ros/control-plane:p2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |-
+              source /ws/install/setup.bash
+              exec ros2 run e0_kuberos_bootstrap e0_kuberos_bootstrap --manifest-dir /etc/s3/manifests --kuberos-url http://kuberos-api:8000 --timeout-sec 1200 --expected-count __S3_N_ROBOTS__
+          env:
+            - name: KUBEROS_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kuberos-api-token
+                  key: token
+          volumeMounts:
+            - name: manifests
+              mountPath: /etc/s3/manifests
+              readOnly: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+      volumes:
+        - name: manifests
+          configMap:
+            name: s3-kuberos-manifests

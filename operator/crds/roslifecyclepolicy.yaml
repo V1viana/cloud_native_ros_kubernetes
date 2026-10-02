@@ -1,0 +1,43 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: roslifecyclepolicies.dronekube.io
+spec:
+  group: dronekube.io
+  scope: Namespaced
+  names:
+    kind: ROSLifecyclePolicy
+    plural: roslifecyclepolicies
+    singular: roslifecyclepolicy
+    shortNames: [rlp]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      # No status: no controller reconciles this CRD. The State Bridge reads the
+      # spec of the policy named default-lifecycle-policy on each transition
+      # attempt (missing -> the proposal's defaults 15s/3/true), and the
+      # proposal's own example declares no status either. A status.
+      # observedGeneration used to be declared here and was never written by
+      # anything (docs/CRD_CONTRACT_AUDIT.md, D5, V3).
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              properties:
+                transitionTimeoutSec:
+                  type: number
+                  default: 15
+                  minimum: 0
+                  exclusiveMinimum: true
+                maxTransitionRetries:
+                  type: integer
+                  default: 3
+                  minimum: 0
+                  description: Additional RPC attempts after the first attempt, per Pod, generation and lifecycle step.
+                requireReadinessBeforeActive:
+                  type: boolean
+                  default: true
