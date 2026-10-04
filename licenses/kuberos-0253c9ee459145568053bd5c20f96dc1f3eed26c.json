@@ -1,0 +1,497 @@
+{
+ "command": "scripts/kuberos_inventory.py generate --commit 0253c9ee459145568053bd5c20f96dc1f3eed26c --remote https://github.com/kuberos-io/kuberos.git",
+ "commit": "0253c9ee459145568053bd5c20f96dc1f3eed26c",
+ "entries": {
+  ".devcontainer/Dockerfile": {
+   "mode": "100644",
+   "sha": "b9c16e769ad8abd8ee383be85ef0aa2f1dc6189d",
+   "type": "blob"
+  },
+  ".devcontainer/devcontainer.json": {
+   "mode": "100644",
+   "sha": "b20ee32c1ff752121bc82a18d905ce870705ff85",
+   "type": "blob"
+  },
+  ".devcontainer/docker-compose.yml": {
+   "mode": "100644",
+   "sha": "897e722fc4b72d31f6533386fe53e2f7787050b2",
+   "type": "blob"
+  },
+  ".gitignore": {
+   "mode": "100644",
+   "sha": "e39e1d5c634f3de5ed08df6e9e69714eced97f53",
+   "type": "blob"
+  },
+  "Dockerfile": {
+   "mode": "100644",
+   "sha": "3794c59acec9148f5f6b0bdbcde6d15c21562297",
+   "type": "blob"
+  },
+  "LICENSE": {
+   "mode": "100644",
+   "sha": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64",
+   "type": "blob"
+  },
+  "README.md": {
+   "mode": "100644",
+   "sha": "2f330c0d2e5f62371cb6aaa4577bab6a1ca3723c",
+   "type": "blob"
+  },
+  "deployment/celery-workers.yaml": {
+   "mode": "100644",
+   "sha": "877757bf3ec3eed1c490b66973224881742e7e0a",
+   "type": "blob"
+  },
+  "deployment/kuberos.yaml": {
+   "mode": "100644",
+   "sha": "9a493dbb604f856b46bb2ea99e75df7febac96e3",
+   "type": "blob"
+  },
+  "deployment/postgres.yaml": {
+   "mode": "100644",
+   "sha": "2176b361d4fa78bd66e86c0f128c9de48df0f60e",
+   "type": "blob"
+  },
+  "deployment/pv-pvc-kuberos.yaml": {
+   "mode": "100644",
+   "sha": "e7ff3c573ad177d5389a3d725ad31a5da2a6f2d9",
+   "type": "blob"
+  },
+  "deployment/redis.yaml": {
+   "mode": "100644",
+   "sha": "2155cfdbe5ba1dc29b15d72d98d3a2d35c2733bb",
+   "type": "blob"
+  },
+  "docs/advanced_setup.md": {
+   "mode": "100644",
+   "sha": "efedd5ab8e2eaf0a7f1164d52f7a50b277ad6abc",
+   "type": "blob"
+  },
+  "docs/azure_cloud.md": {
+   "mode": "100644",
+   "sha": "857b845a41976bdd44105c53e63bc3fb683cc69f",
+   "type": "blob"
+  },
+  "docs/batchjobs.md": {
+   "mode": "100644",
+   "sha": "6eaabc57ee84ebb24224526ae21d5c64b7aa1cab",
+   "type": "blob"
+  },
+  "docs/celery.md": {
+   "mode": "100644",
+   "sha": "9dfa48df5b65444ff7cfde786d89c3fffef121ff",
+   "type": "blob"
+  },
+  "docs/convention.md": {
+   "mode": "100644",
+   "sha": "63bd01b690298298e6e7ef4a6f310fb0ce36c035",
+   "type": "blob"
+  },
+  "docs/deploy_kuberos.md": {
+   "mode": "100644",
+   "sha": "86c477f9bc108e221b221212369ae3536c36aec2",
+   "type": "blob"
+  },
+  "docs/k3s.md": {
+   "mode": "100644",
+   "sha": "94c6238a03154a134bce1b17a706bc7926824646",
+   "type": "blob"
+  },
+  "docs/k8s_with_kubeadm.md": {
+   "mode": "100644",
+   "sha": "6bddc164d7eed6a332c4b0786842cee9a982f332",
+   "type": "blob"
+  },
+  "docs/networking.md": {
+   "mode": "100644",
+   "sha": "e4cac53ca1e0e68317be547b82039e09702c3de7",
+   "type": "blob"
+  },
+  "docs/nfs_server.md": {
+   "mode": "100644",
+   "sha": "b093a20b17a971939e392c8b0c3713b7a21198d7",
+   "type": "blob"
+  },
+  "kuberos/main/__init__.py": {
+   "mode": "100644",
+   "sha": "6ed0c63b6dfce75067dc5470e7152ca1c009d1c9",
+   "type": "blob"
+  },
+  "kuberos/main/admin.py": {
+   "mode": "100644",
+   "sha": "d8e3fd0c0eacde75320742561032f919688477cf",
+   "type": "blob"
+  },
+  "kuberos/main/api/__init__.py": {
+   "mode": "100644",
+   "sha": "8786bde7a7a724a40cc9ad22751080d6d6f8aa3d",
+   "type": "blob"
+  },
+  "kuberos/main/api/auth.py": {
+   "mode": "100644",
+   "sha": "030b7850fc2a17ddb67b9aa74b2656482a9735fb",
+   "type": "blob"
+  },
+  "kuberos/main/api/base.py": {
+   "mode": "100644",
+   "sha": "dc00ec747651e7084f1ea1df6dbaf891464479ab",
+   "type": "blob"
+  },
+  "kuberos/main/api/batchjobs.py": {
+   "mode": "100644",
+   "sha": "96a19dbab5f0cc1ebbc48063a3465991e3135b8d",
+   "type": "blob"
+  },
+  "kuberos/main/api/cluster_operating.py": {
+   "mode": "100644",
+   "sha": "48e1ed8a3883a40cec5192effa068b8288fb4d5d",
+   "type": "blob"
+  },
+  "kuberos/main/api/clusters.py": {
+   "mode": "100644",
+   "sha": "207edefe14f163f4a8f21a7cee7172d6e32cc974",
+   "type": "blob"
+  },
+  "kuberos/main/api/deploying.py": {
+   "mode": "100644",
+   "sha": "d6d9509e9ecc6ee462bd3ba18da238551c7db73e",
+   "type": "blob"
+  },
+  "kuberos/main/api/deployment.py": {
+   "mode": "100644",
+   "sha": "a80e9cddeaafa7511afc7c5589fdcd92dc09d783",
+   "type": "blob"
+  },
+  "kuberos/main/api/fleets.py": {
+   "mode": "100644",
+   "sha": "298c0cd71a3224256f326dfaca2a427401aade27",
+   "type": "blob"
+  },
+  "kuberos/main/api/hosts.py": {
+   "mode": "100644",
+   "sha": "cd9bbb1a976c7f46d4de54bbca975afcf35dc3d7",
+   "type": "blob"
+  },
+  "kuberos/main/api/rospackages.py": {
+   "mode": "100644",
+   "sha": "4fa6b11b7906ec3f0a854f1f7987f984992c0056",
+   "type": "blob"
+  },
+  "kuberos/main/api/swagger.py": {
+   "mode": "100644",
+   "sha": "77ad26f9ca56fa60373fb697770b5979cf5a11d0",
+   "type": "blob"
+  },
+  "kuberos/main/apps.py": {
+   "mode": "100644",
+   "sha": "47e2bfbb012a1f89fee0c7cda30aff8d939e3a79",
+   "type": "blob"
+  },
+  "kuberos/main/models/__init__.py": {
+   "mode": "100644",
+   "sha": "fbbcf3fcd722ebf26243af1c19a10e93c7b2c211",
+   "type": "blob"
+  },
+  "kuberos/main/models/auth/accounts.py": {
+   "mode": "100644",
+   "sha": "5d431b23e339b0b0c07a8477165c4bc6dc7634ff",
+   "type": "blob"
+  },
+  "kuberos/main/models/base.py": {
+   "mode": "100644",
+   "sha": "b193b8ea84e865704acf87b8f4e6335528bcf081",
+   "type": "blob"
+  },
+  "kuberos/main/models/batchjobs.py": {
+   "mode": "100644",
+   "sha": "2a3baa721ea33bd2cdb50190b8beeacb15db1e2f",
+   "type": "blob"
+  },
+  "kuberos/main/models/clusters.py": {
+   "mode": "100644",
+   "sha": "821039cced904ad0c638c1cff2bea59d432e101c",
+   "type": "blob"
+  },
+  "kuberos/main/models/deployments.py": {
+   "mode": "100644",
+   "sha": "9f72b4353df8d01ebf796b7b4fac9d4a1532ec74",
+   "type": "blob"
+  },
+  "kuberos/main/models/devices.py": {
+   "mode": "100644",
+   "sha": "b8adbe37573fdbe70d2b923bf2512aff87e84cfe",
+   "type": "blob"
+  },
+  "kuberos/main/models/event.py": {
+   "mode": "100644",
+   "sha": "3743fa2f2b444aed6bd1d6e6032e30e4c74fd2c0",
+   "type": "blob"
+  },
+  "kuberos/main/models/fleets.py": {
+   "mode": "100644",
+   "sha": "b77f07f116786beb134c43cab20267421285bea3",
+   "type": "blob"
+  },
+  "kuberos/main/models/hosts.py": {
+   "mode": "100644",
+   "sha": "5ad9f92779f500a8fa58353de3bf46acb610037d",
+   "type": "blob"
+  },
+  "kuberos/main/models/projects.py": {
+   "mode": "100644",
+   "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+   "type": "blob"
+  },
+  "kuberos/main/models/rosbridges.py": {
+   "mode": "100644",
+   "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+   "type": "blob"
+  },
+  "kuberos/main/models/rospackages.py": {
+   "mode": "100644",
+   "sha": "7d7396feb5ae3b54ca0cbe640fbb8907fc072013",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/__init__.py": {
+   "mode": "100644",
+   "sha": "d892c9ff20b6a37e4c545afa12b0bea836525df6",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/auth.py": {
+   "mode": "100644",
+   "sha": "10f64e498914c8e55d20ffd8cdc5828fe5efdcda",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/base.py": {
+   "mode": "100644",
+   "sha": "53c6af6db2d9213a30ae415e57675895feadc001",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/batchjobs.py": {
+   "mode": "100644",
+   "sha": "afbccc251258125db373fa0331aeb7a0686b6367",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/clusters.py": {
+   "mode": "100644",
+   "sha": "6507133f9fc3b3fb4b674b5b66ee3e5d77f98d6a",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/deployments.py": {
+   "mode": "100644",
+   "sha": "ef5761e7a2593bdb76508872004f333520a835ef",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/fleets.py": {
+   "mode": "100644",
+   "sha": "560049a954c6a8419827c466bd8c4d09f7677334",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/hosts.py": {
+   "mode": "100644",
+   "sha": "78f6e523267981ebd8bda46a23f3bb492f3250c9",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/rospackages.py": {
+   "mode": "100644",
+   "sha": "609c6170eb9e8170d8eb7a4b3abbeba9e6becefd",
+   "type": "blob"
+  },
+  "kuberos/main/serializers/utils.py": {
+   "mode": "100644",
+   "sha": "73d576137a2d5a9b5a4d333f345eecab32c461fe",
+   "type": "blob"
+  },
+  "kuberos/main/signals.py": {
+   "mode": "100644",
+   "sha": "cb28ea09f22bcf89bedca5d981849866fc901280",
+   "type": "blob"
+  },
+  "kuberos/main/tasks/batch_job_controller.py": {
+   "mode": "100644",
+   "sha": "209e53c61162e79b120ab4ba4d32f7b8e0678dcb",
+   "type": "blob"
+  },
+  "kuberos/main/tasks/cluster_operating.py": {
+   "mode": "100644",
+   "sha": "ec4f5948a150c8234147df19c3360d948aba1ca6",
+   "type": "blob"
+  },
+  "kuberos/main/tasks/deployment_controller.py": {
+   "mode": "100644",
+   "sha": "2d162b1e52ef4f9bb3ad787508465c843ebc36b7",
+   "type": "blob"
+  },
+  "kuberos/main/tasks/ros_deploying.py": {
+   "mode": "100644",
+   "sha": "0d4c09bb73a1f292700f05b55ac776bba762c2bc",
+   "type": "blob"
+  },
+  "kuberos/main/tests.py": {
+   "mode": "100644",
+   "sha": "f3161699cd8f9e1c929f903038e67cb74d3655cc",
+   "type": "blob"
+  },
+  "kuberos/main/urls.py": {
+   "mode": "100644",
+   "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+   "type": "blob"
+  },
+  "kuberos/main/urls/__init__.py": {
+   "mode": "100644",
+   "sha": "7d80aa0a8d1faed707ad57b538f94bbe92c97d56",
+   "type": "blob"
+  },
+  "kuberos/main/urls/auth.py": {
+   "mode": "100644",
+   "sha": "d1e1e2cbdf9ed827bad0186276fb8a776b43563d",
+   "type": "blob"
+  },
+  "kuberos/main/urls/bachjobs.py": {
+   "mode": "100644",
+   "sha": "d9f498637e79c790f78375390a1d15d6df06973b",
+   "type": "blob"
+  },
+  "kuberos/main/urls/cluster.py": {
+   "mode": "100644",
+   "sha": "29fd56e0712a7efd2f11dfcdeaeee3093548d71d",
+   "type": "blob"
+  },
+  "kuberos/main/urls/cluster_operating.py": {
+   "mode": "100644",
+   "sha": "74668bd7585d085676f6a0df7b8060cb41a7d226",
+   "type": "blob"
+  },
+  "kuberos/main/urls/deploying.py": {
+   "mode": "100644",
+   "sha": "3323d6b22c91b8861426796ea1cd9c57372689c6",
+   "type": "blob"
+  },
+  "kuberos/main/urls/deployment.py": {
+   "mode": "100644",
+   "sha": "4e1e306836b0ddff23ad1e1ebee5192216a49787",
+   "type": "blob"
+  },
+  "kuberos/main/urls/fleet.py": {
+   "mode": "100644",
+   "sha": "2c25c27cba77398214096afca7021231a541fbe2",
+   "type": "blob"
+  },
+  "kuberos/main/urls/host.py": {
+   "mode": "100644",
+   "sha": "36ea2c7e66dde0810e605c25b9a19a0e6d60fb47",
+   "type": "blob"
+  },
+  "kuberos/main/urls/rospackages.py": {
+   "mode": "100644",
+   "sha": "df55ac1d4507347569ab7ee14325e342a744f3bb",
+   "type": "blob"
+  },
+  "kuberos/main/utils.py": {
+   "mode": "100644",
+   "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+   "type": "blob"
+  },
+  "kuberos/main/utils/secret_utils.py": {
+   "mode": "100644",
+   "sha": "8bacfb2a98782c1d39757c8021a31fee6f0a930b",
+   "type": "blob"
+  },
+  "kuberos/main/views.py": {
+   "mode": "100644",
+   "sha": "91ea44a218fbd2f408430959283f0419c921093e",
+   "type": "blob"
+  },
+  "kuberos/manage.py": {
+   "mode": "100755",
+   "sha": "104f7eafb51146e81a47660227f3e084f0960a47",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/kuberos_executer.py": {
+   "mode": "100644",
+   "sha": "6554e28da5fd4b1858396a7824594257f6ec2c62",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/__init__.py": {
+   "mode": "100644",
+   "sha": "225e4b6dd3df1e677df959766960c10a65e9f26e",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/fleet.py": {
+   "mode": "100644",
+   "sha": "3b5c57de3ffd7f3fee8fba0f04ec88137a4575de",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/job_scheduler.py": {
+   "mode": "100644",
+   "sha": "4824889fb927ff45e8d2e2215d09a2b7e7bc5b76",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/manifest.py": {
+   "mode": "100644",
+   "sha": "02865202dbe94ab342343d9951cab3887f19da1d",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/node.py": {
+   "mode": "100644",
+   "sha": "253b311af0798bf7d944c09d6fb994c1995b70b0",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/plugins.py": {
+   "mode": "100644",
+   "sha": "eae2f24c5ddc935e4864bfa58c2e02ecba2163b9",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/rosmodule.py": {
+   "mode": "100644",
+   "sha": "da3967fde6bd29317b45f44b7e47ac5aa2d30d20",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/rosparameter.py": {
+   "mode": "100644",
+   "sha": "32aa8e44a9eee64582917790a2320ee4ec77d8b2",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/scheduler.py": {
+   "mode": "100644",
+   "sha": "6508a130ca0eff1bbff09d1e7053ddf713084126",
+   "type": "blob"
+  },
+  "kuberos/pykuberos/scheduler/scheduler_base.py": {
+   "mode": "100644",
+   "sha": "7b72b4c00c9570f639f9edbd3dbcb477483c56fe",
+   "type": "blob"
+  },
+  "kuberos/settings/__init__.py": {
+   "mode": "100644",
+   "sha": "a289a61be181aa95635b9426dc9777b76837739c",
+   "type": "blob"
+  },
+  "kuberos/settings/asgi.py": {
+   "mode": "100644",
+   "sha": "2fac4dc8b1da99d0a9f9dec3a6c9be1163dca206",
+   "type": "blob"
+  },
+  "kuberos/settings/production.py": {
+   "mode": "100644",
+   "sha": "14050607b07ed9bcd17f4ae844c24f35f0ab9c9e",
+   "type": "blob"
+  },
+  "kuberos/settings/urls.py": {
+   "mode": "100644",
+   "sha": "e8962316c612e7b0ea516becd7748b804b268895",
+   "type": "blob"
+  },
+  "kuberos/settings/wsgi.py": {
+   "mode": "100644",
+   "sha": "0ccdf5a4f7a262d2ab6464be3fee5422ba0c166f",
+   "type": "blob"
+  },
+  "requirements.txt": {
+   "mode": "100644",
+   "sha": "860c788e2f9d76c5e74bd9c66f3b79c032478c4e",
+   "type": "blob"
+  }
+ },
+ "remote": "https://github.com/kuberos-io/kuberos.git"
+}

@@ -37,6 +37,9 @@
 !patches/
 !patches/robotkube-event-detector/
 !patches/robotkube-event-detector/**
+# License text and attributions, copied into every image (/usr/share/licenses/cloud-native-ros).
+!LICENSE
+!THIRD_PARTY_NOTICES
 # Host-side bytecode never enters a build context: a judge run on the host imports
 # modules from sources/ and writes __pycache__ there; the next build then misses the
 # cache and a rebuilt colcon layer gets another image ID (S2-B control, 30 September
@@ -44,3 +47,9 @@
 # includes above.
 **/__pycache__
 **/*.pyc
+# The px4_msgs submodule's .git is a FILE naming its worktree-specific gitdir: every worktree
+# had another build context, so control-plane, event-detector, state-bridge and mission-observer
+# got new image IDs, and event-detector's final stage kept it in the /ws/src layer (Dockerfile
+# line 40). Decided by Viviana on 2 October 2026 (option 1, R14_WRAPPER_DESIGN_DRAFT.md 12-13);
+# last, so it wins over "!integrations/px4_msgs/**".
+integrations/px4_msgs/.git

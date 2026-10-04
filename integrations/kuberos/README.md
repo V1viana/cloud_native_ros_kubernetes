@@ -1,5 +1,8 @@
 # KubeROS Platform (Preview)
 
+> Modified by the cloud_native_ros_kubernetes project (2026) from KubeROS (kuberos-io/kuberos commit 0253c9e).
+> See THIRD_PARTY_NOTICES (repository root; in the container images: /usr/share/licenses/cloud-native-ros/THIRD_PARTY_NOTICES).
+
 This repository contains the main components of the KubeROS platform, which is built on Django, with a strong community support. This platform can be easily deployed in any self-managed Kubernetes cluster, which acts as the main cluster in KubeROS.
 
  - **KubeROS API server**: handling API requests and interacting among various system elements.

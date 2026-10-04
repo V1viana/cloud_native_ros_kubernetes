@@ -12,7 +12,18 @@ Path:
 integrations/kuberos
 ~~~
 
-The directory is a vendored project snapshot based on KubeROS commit:
+The directory is a vendored project snapshot. It has two distinct references.
+
+Upstream KubeROS revision (https://github.com/kuberos-io/kuberos, branch `main`)
+from which the adaptation started:
+
+~~~text
+0253c9ee459145568053bd5c20f96dc1f3eed26c
+~~~
+
+Revision of the author's own adaptation repository
+(https://github.com/V1viana/kuberos_px4) from which this copy was taken. It is
+not an upstream KubeROS revision: it already contains the author's changes.
 
 ~~~text
 d8ab5294a4cc05d58b529ca360bc1a09d842b107

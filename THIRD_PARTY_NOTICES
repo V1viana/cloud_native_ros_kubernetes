@@ -1,0 +1,154 @@
+Cloud-Native ROS 2 and Kubernetes
+Copyright 2026 Viviana Casale
+
+The original code of this project is licensed under the Apache License,
+Version 2.0 (see LICENSE). Third-party components keep their own licenses,
+listed below with their origin and the changes made by this project.
+
+In the container images this file and the license texts are in
+/usr/share/licenses/cloud-native-ros/. Base images and the system and Python
+packages installed in them keep their own license files
+(/usr/share/doc/*/copyright, *.dist-info).
+
+======================================================================
+1. KubeROS
+======================================================================
+Origin:   https://github.com/kuberos-io/kuberos.git
+          commit 0253c9ee459145568053bd5c20f96dc1f3eed26c
+License:  Apache License 2.0
+          repository: integrations/kuberos/LICENSE
+          images:     /usr/share/licenses/cloud-native-ros/kuberos/LICENSE
+Copy:     integrations/kuberos, with changes by this project. The copy was
+          taken through https://github.com/V1viana/kuberos_px4 (commit
+          d8ab5294a4cc05d58b529ca360bc1a09d842b107), a repository of the same
+          author that already carried part of these changes. It is an
+          intermediate step, not the original.
+Image:    kuberos
+Inventory of the original: licenses/kuberos-0253c9ee459145568053bd5c20f96dc1f3eed26c.json
+
+Modified files. Each one carries a notice in its first lines (Apache
+License 2.0, section 4(b)); paths are relative to integrations/kuberos:
+BEGIN KUBEROS MODIFIED FILES
+    .devcontainer/Dockerfile
+    .devcontainer/devcontainer.json
+    .devcontainer/docker-compose.yml
+    .gitignore
+    README.md
+    kuberos/main/api/auth.py
+    kuberos/main/api/deploying.py
+    kuberos/main/models/clusters.py
+    kuberos/main/models/deployments.py
+    kuberos/main/serializers/deployments.py
+    kuberos/main/tasks/deployment_controller.py
+    kuberos/main/tasks/ros_deploying.py
+    kuberos/main/urls.py
+    kuberos/manage.py
+    kuberos/pykuberos/kuberos_executer.py
+    kuberos/pykuberos/scheduler/fleet.py
+    kuberos/pykuberos/scheduler/job_scheduler.py
+    kuberos/pykuberos/scheduler/manifest.py
+    kuberos/pykuberos/scheduler/rosmodule.py
+    kuberos/pykuberos/scheduler/rosparameter.py
+    kuberos/pykuberos/scheduler/scheduler.py
+    kuberos/pykuberos/scheduler/scheduler_base.py
+    kuberos/settings/__init__.py
+    requirements.txt
+END KUBEROS MODIFIED FILES
+
+Files moved without changes (original path -> path in the copy):
+BEGIN KUBEROS MOVED FILES
+    docs/advanced_setup.md -> docs/docs_kuberos/advanced_setup.md
+    docs/azure_cloud.md -> docs/docs_kuberos/azure_cloud.md
+    docs/batchjobs.md -> docs/docs_kuberos/batchjobs.md
+    docs/celery.md -> docs/docs_kuberos/celery.md
+    docs/convention.md -> docs/docs_kuberos/convention.md
+    docs/deploy_kuberos.md -> docs/docs_kuberos/deploy_kuberos.md
+    docs/k3s.md -> docs/docs_kuberos/k3s.md
+    docs/k8s_with_kubeadm.md -> docs/docs_kuberos/k8s_with_kubeadm.md
+    docs/networking.md -> docs/docs_kuberos/networking.md
+    docs/nfs_server.md -> docs/docs_kuberos/nfs_server.md
+END KUBEROS MOVED FILES
+
+Files added by this project (not in the original):
+BEGIN KUBEROS ADDED FILES
+    .dockerignore
+    docs/DEPLOYMENT_UPDATE_API.md
+    docs/README.md
+    kuberos/main/management/__init__.py
+    kuberos/main/management/commands/__init__.py
+    kuberos/main/management/commands/bootstrap_p2.py
+    kuberos/main/migrations/0001_initial.py
+    kuberos/main/migrations/0002_deployment_update.py
+    kuberos/main/migrations/__init__.py
+    kuberos/main/tasks/__init__.py
+    kuberos/main/tasks/deployment_update.py
+    kuberos/pykuberos/kubernetes_client.py
+    kuberos/settings/base.py
+    kuberos/settings/celery.py
+END KUBEROS ADDED FILES
+kuberos/settings/base.py and kuberos/settings/celery.py were written or
+adapted by Viviana Casale for this project; they are not files of the
+original KubeROS.
+
+Original files not copied:
+BEGIN KUBEROS NOT COPIED FILES
+    kuberos/main/tests.py
+END KUBEROS NOT COPIED FILES
+
+======================================================================
+2. PX4 Messages (px4_msgs)
+======================================================================
+Origin:   https://github.com/PX4/px4_msgs.git
+          commit 1f3cf7c2649d01c93158df8ea256a9c00611f812 (git submodule
+          integrations/px4_msgs), unmodified
+License:  BSD 3-Clause License, Copyright (c) 2019, PX4 Development Team
+          repository: integrations/px4_msgs/LICENSE
+          images:     /usr/share/licenses/cloud-native-ros/px4_msgs/LICENSE
+Images:   control-plane, event-detector, state-bridge, mission-observer
+          (message code generated from the package at build time; the
+          event-detector image also keeps the package sources in an earlier
+          layer)
+
+======================================================================
+3. RobotKube Event Detector
+======================================================================
+Origin:   https://github.com/ika-rwth-aachen/event_detector.git
+          commit 32f59d0c2ff1a8be4c48c96f10cee6f0edf6cdbf (git submodule
+          integrations/robotkube/event_detector)
+License:  MIT License, Copyright (c) 2025 Institute for Automotive
+          Engineering (ika), RWTH Aachen University
+          repository: integrations/robotkube/event_detector/LICENSE
+          images:     /usr/share/licenses/cloud-native-ros/robotkube-event_detector/LICENSE
+Changes:  patched at build time by
+          patches/robotkube-event-detector/0001-humble-rosbag2-timestamp.patch
+          (ROS 2 Humble compatibility); the submodule itself is unmodified
+Image:    event-detector
+
+======================================================================
+4. RobotKube Perception Interfaces (perception_msgs)
+======================================================================
+Origin:   https://github.com/ika-rwth-aachen/perception_interfaces.git
+          commit 1d1472f35f01ef2e575e75733c9bb2316099641c (git submodule
+          integrations/robotkube/perception_interfaces), unmodified; only the
+          package perception_msgs is built
+License:  MIT License, Copyright (c) 2025 Institute for Automotive
+          Engineering (ika), RWTH Aachen University
+          repository: integrations/robotkube/perception_interfaces/LICENSE
+          images:     /usr/share/licenses/cloud-native-ros/robotkube-perception_interfaces/LICENSE
+Image:    event-detector
+
+======================================================================
+5. RobotKube Application Manager
+======================================================================
+Origin:   https://github.com/ika-rwth-aachen/application_manager.git
+          commit 8ddb99a70f7f4f571cbaaa0ccea19fb3432424e0 (git submodule
+          integrations/robotkube/application_manager)
+License:  MIT License, Copyright (c) 2025 Institute for Automotive
+          Engineering (ika), RWTH Aachen University
+Use:      reference only. It is not built into any image. The package
+          sources/cloud_native_application_manager is an original
+          implementation of this project that follows its ROS 2 Action
+          pattern.
+
+Origin, licenses and changes are also recorded in
+docs/THIRD_PARTY_PROVENANCE.md.

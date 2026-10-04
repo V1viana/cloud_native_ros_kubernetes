@@ -1,0 +1,19 @@
+{
+ "platform": "linux/amd64",
+ "verified_at_utc": "2026-10-02T15:59:36Z",
+ "how": "registry digests read with 'docker buildx imagetools inspect <repository>@<index_digest>'; the layers of each linux/amd64 manifest equal the first layers of the local images built on it (R14_WRAPPER_DESIGN_DRAFT.md 13.11). index_digest is what the Dockerfiles pin; platform_manifest_digest is the manifest of the platform used.",
+ "images": {
+  "ros:humble-ros-base": {
+   "index_digest": "sha256:5417e56962ff6e15d4cf9b2f78a71a78f3901f47cd78696b575b7eecdb54eb78",
+   "platform_manifest_digest": "sha256:8be79640caf3a89679d80c7666e759816cf59822521b092a5807ea8683bca366"
+  },
+  "python:3.11-slim": {
+   "index_digest": "sha256:bab1b7ef4b450c81002278d035eff85ebe394ae94df904f7a3ba14f7e16e487b",
+   "platform_manifest_digest": "sha256:922f47525757de33aff59f24cdfc85f412ac4a06aa8af7c7e9028d584b7bcdeb"
+  },
+  "python:3.9-bullseye": {
+   "index_digest": "sha256:3dcaf39bbe2d6d8031a4a7ce68a20f2d494419aca18ec064f9e82e146e97a0ed",
+   "platform_manifest_digest": "sha256:5bd3c295ffab8b738108c7705052086d78b036078d5605dfc51e328ab758cc07"
+  }
+ }
+}

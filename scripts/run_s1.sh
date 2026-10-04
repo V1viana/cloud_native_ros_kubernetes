@@ -279,6 +279,17 @@ for robot in drone01 drone02 drone03; do
   }
 done
 
+# The baseline needs every Deployment available, as variant A already waits for. The
+# lifecycle state Active does not imply it: in the R14 campaign (2 October, row 18) the Pod of
+# drone03 became Ready about 1 s after the baseline reading and the judge declared the baseline
+# not valid. Block S1-delete (docs/S1_DELETE_BLOCK_PROPOSAL_DRAFT.md 4): this wait only; judge,
+# observer, window, workload, probes and images are unchanged. A timeout ends the run before the
+# baseline and the injection (exit 1, as the Active wait above).
+"${K[@]}" wait --for=condition=available deployment --all -n "$NAMESPACE" --timeout=300s || {
+  echo "Deployments not available within 300 s before the baseline" >&2
+  exit 1
+}
+
 observe_and_judge
 exit $?
 

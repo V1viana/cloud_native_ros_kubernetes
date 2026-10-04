@@ -13,7 +13,7 @@ commit e licenze sono nel [registro di provenienza](THIRD_PARTY_PROVENANCE.md).
 | Application Manager (RobotKube) | submodule `integrations/robotkube/application_manager` | MIT | solo riferimento, non eseguito |
 | Perception Interfaces (RobotKube) | submodule `integrations/robotkube/perception_interfaces` | MIT | dipendenza dell'Event Detector |
 | PX4 Messages | submodule `integrations/px4_msgs` | BSD 3-Clause | tipi dei messaggi PX4 |
-| DroneKube | repository separato, non incluso | - | riferimento del lavoro precedente |
+| DroneKube | repository separato, non incluso | - | lavoro precedente, architettura diversa (sezione 4) |
 
 ## 2. KubeROS
 
@@ -51,15 +51,22 @@ con la stessa identita' nello stesso momento.
 
 ## 4. DroneKube
 
-DroneKube e' il lavoro precedente da cui deriva l'idea di separare il percorso
-critico sul drone da quello gestito da Kubernetes. Il suo codice non e' incluso.
+DroneKube e' il lavoro precedente da cui deriva l'idea di separare la reazione
+rapida su DDS dal percorso gestito da Kubernetes. Aveva due livelli: una
+macchina con i container degli UAV e una, sul lato cloud, con un solo Event
+Detector per tutta la flotta, l'Application Manager e un cluster Kubernetes a
+nodo singolo. Il suo codice non e' incluso, e i risultati di quella valutazione
+non si applicano alla variante A di questo progetto, che e' un'implementazione
+diversa.
 
-| Elemento | Decisione |
+| DroneKube | In questo progetto |
 | --- | --- |
-| Event Detector monolitico con eventi JSON | sostituito dal framework a plugin e da un messaggio tipizzato |
-| Application Manager sull'edge | sostituito da Dispatcher e Application Manager nel control plane |
-| Regola di prossimita' fra droni | esclusa: richiede geometria multi-drone e non riguarda l'orchestrazione |
-| Job di registrazione su evento | ripreso come Job diagnostico a durata limitata |
+| Un solo Event Detector sul lato cloud, per tutta la flotta | Un Event Detector per drone, sul nodo del drone |
+| Regole di prossimita' fra due UAV e di batteria | Regole di batteria, telemetria e latenza di analytics; la prossimita' e' esclusa perche' richiede geometria multi-drone e non riguarda l'orchestrazione |
+| Comando di batteria pubblicato su DDS dall'Event Detector del lato cloud, senza passare da Kubernetes | Comando pubblicato dal drone stesso, senza dipendere dal percorso di orchestrazione |
+| Application Manager che estende quello open source di RobotKube | Dispatcher e Application Manager scritti per questo progetto, con lo stesso schema evento-azione |
+| Job temporaneo che registra i dati della missione su un evento | Ripreso come Job diagnostico a durata limitata |
+| KubeROS non partecipa all'esecuzione | KubeROS nel ciclo di esecuzione, su un cluster a piu' nodi |
 
 ## 5. Componenti Scritti Per Questo Progetto
 

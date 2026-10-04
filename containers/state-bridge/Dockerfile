@@ -3,7 +3,7 @@
 # network namespace so DDS discovery of the target Lifecycle node works
 # without any extra configuration. Humble base to match the lifecycle_msgs
 # ABI the rest of the onboard/control-plane images build against.
-FROM ros:humble-ros-base AS builder
+FROM ros:humble-ros-base@sha256:5417e56962ff6e15d4cf9b2f78a71a78f3901f47cd78696b575b7eecdb54eb78 AS builder
 
 WORKDIR /ws/src
 COPY integrations/px4_msgs ./px4_msgs
@@ -16,10 +16,13 @@ RUN . /opt/ros/humble/setup.sh && \
 
 # Runtime stage: same reasoning as control-plane's own Dockerfile -- no
 # rosdep step exists here either, so nothing beyond /ws/install is needed.
-FROM ros:humble-ros-base
+FROM ros:humble-ros-base@sha256:5417e56962ff6e15d4cf9b2f78a71a78f3901f47cd78696b575b7eecdb54eb78
 
 WORKDIR /ws
 COPY --from=builder /ws/install /ws/install
+# License texts and attributions travel with the image (THIRD_PARTY_NOTICES).
+COPY LICENSE THIRD_PARTY_NOTICES /usr/share/licenses/cloud-native-ros/
+COPY integrations/px4_msgs/LICENSE /usr/share/licenses/cloud-native-ros/px4_msgs/LICENSE
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]

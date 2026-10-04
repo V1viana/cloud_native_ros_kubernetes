@@ -1,4 +1,4 @@
-FROM ros:humble-ros-base AS builder
+FROM ros:humble-ros-base@sha256:5417e56962ff6e15d4cf9b2f78a71a78f3901f47cd78696b575b7eecdb54eb78 AS builder
 
 WORKDIR /ws/src
 COPY integrations/px4_msgs ./px4_msgs
@@ -34,7 +34,7 @@ RUN . /opt/ros/humble/setup.sh && \
 # against the same (already-patched) sources, rather than hand-picking apt
 # packages, keeps this in sync with whatever the packages' own package.xml
 # actually declares.
-FROM ros:humble-ros-base
+FROM ros:humble-ros-base@sha256:5417e56962ff6e15d4cf9b2f78a71a78f3901f47cd78696b575b7eecdb54eb78
 
 WORKDIR /ws
 COPY --from=builder /ws/src /tmp/src
@@ -42,6 +42,11 @@ RUN apt-get update && \
     rosdep install --from-paths /tmp/src --ignore-src -r -y --rosdistro humble --dependency-types=exec && \
     rm -rf /var/lib/apt/lists/* /tmp/src
 COPY --from=builder /ws/install /ws/install
+# License texts and attributions travel with the image (THIRD_PARTY_NOTICES).
+COPY LICENSE THIRD_PARTY_NOTICES /usr/share/licenses/cloud-native-ros/
+COPY integrations/px4_msgs/LICENSE /usr/share/licenses/cloud-native-ros/px4_msgs/LICENSE
+COPY integrations/robotkube/event_detector/LICENSE /usr/share/licenses/cloud-native-ros/robotkube-event_detector/LICENSE
+COPY integrations/robotkube/perception_interfaces/LICENSE /usr/share/licenses/cloud-native-ros/robotkube-perception_interfaces/LICENSE
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]

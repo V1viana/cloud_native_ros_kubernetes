@@ -25,14 +25,32 @@ Non sostituisce i testi delle licenze. Evita che file locali, immagini container
 | --- | --- |
 | Sorgente usata per l'audit | repository KubeROS esterno alla copia pubblicabile |
 | Percorso integrazione | integrations/kuberos |
-| Remote | https://github.com/V1viana/kuberos.git |
-| Commit | d8ab5294a4cc05d58b529ca360bc1a09d842b107 |
-| Data commit | 23 giugno 2026 |
+| Progetto upstream | https://github.com/kuberos-io/kuberos (unico ramo `main`) |
+| Revisione upstream di partenza | 0253c9ee459145568053bd5c20f96dc1f3eed26c (12 febbraio 2024) |
+| Repository dell'adattamento | https://github.com/V1viana/kuberos_px4 (l'indirizzo `V1viana/kuberos` vi rimanda); storia propria dal 10 aprile 2026, senza la storia Git upstream |
+| Revisione dell'adattamento da cui e' presa la copia | d8ab5294a4cc05d58b529ca360bc1a09d842b107 (23 giugno 2026). **Non e' una revisione upstream**: contiene gia' modifiche dell'autrice |
 | Licenza root | Apache License 2.0 |
 | Stato | file candidati tracciati dal commit |
 | Stato baseline | read-only; nessuna modifica runtime del progetto |
 | Modifiche integrazione | Fleet/API core, update replace v1, executor Deployment, migrazione, validazione e documentazione; prototipo Fleet Edge escluso |
 | Modifiche baseline estranee | nessuna inclusa nel progetto |
+
+Confronto file per file del 2 ottobre 2026 (hash dei blob Git):
+
+| Confronto | Identici | Modificati | Assenti | Nuovi |
+| --- | --- | --- | --- | --- |
+| upstream 0253c9ee -> primo commit del repository dell'adattamento (b780bc85) | 93 | 5 | 0 | 65 |
+| upstream 0253c9ee -> d8ab5294 | 70 | 18 | 10 | 69 |
+| d8ab5294 -> copia in integrations/kuberos | 85 | 19 | 53 | 7 |
+| upstream 0253c9ee -> copia in integrations/kuberos | 63 | 24 | 11 | 24 |
+
+Per l'obbligo di indicare i file modificati il riferimento e' la **revisione
+upstream** 0253c9ee, non d8ab5294: rispetto a upstream i file modificati nella
+copia sono 24 (19 se si confronta con d8ab5294, che ne contiene gia' 18
+modificati). Fra i 24 "nuovi" e gli 11 "assenti" rientrano 10 documenti upstream
+spostati senza modifiche da `docs/` a `docs/docs_kuberos/`; l'undicesimo file
+assente e' `kuberos/main/tests.py`; i file nuovi non dovuti a uno spostamento
+sono 14.
 
 Obblighi principali per una distribuzione derivata:
 
