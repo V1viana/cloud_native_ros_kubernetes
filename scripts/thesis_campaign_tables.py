@@ -65,7 +65,19 @@ SHOWN = {"Observed duration": ("s", 1000.0, 1)}
 SHOWN_BY_UNIT = {"ms": ("ms", 1.0, 1), "s": ("s", 1.0, 1), "count": ("count", 1.0, 0)}  # ms: medians of 10 can be x.5
 S3_UNIT = "requests/s"
 S3_LEVEL = {"L0": "API requests", "L1": "API write requests", "L2": "Storage write requests",
-            "L3": "etcd writes"}
+            "L3": "etcd logical writes"}
+# Stated in the caption of the table of paired tests: (pairs used, pairs excluded, zero differences).
+PAIRED_AS_STATED = ("10", "0", "0")
+# Printed tables: no internal level codes; text columns ragged right so that they fit the text width.
+RAGGED = "\\raggedright\\arraybackslash"
+
+
+def col(width):
+    return ">{" + RAGGED + "}p{" + width + "}"
+
+
+def two_lines(top, bottom, align="c"):
+    return "\\shortstack[" + align + "]{\\textbf{" + top + "}\\\\\\textbf{" + bottom + "}}"
 
 
 def source_of(tables_path, pointer):
@@ -273,9 +285,7 @@ def tex_runs(rows):
     lines = []
     for (key, block), per in by.items():
         a, b = per["a"], per["b"]
-        label = LABEL[key] + (" (separate block)" if block == "s1-block" else "")
-        crit = ("-- & --" if a["criterion_n"] == ""
-                else f"{a['criterion_k']}/{a['criterion_n']} & {b['criterion_k']}/{b['criterion_n']}")
+        label = LABEL[key] + (" (supplementary experiments)" if block == "s1-block" else "")
         excluded = []
         for r in (a, b):
             if int(r["invalid"]):
@@ -285,12 +295,13 @@ def tex_runs(rows):
             for f in ("missing", "incomplete", "defect"):
                 if int(r[f]):
                     excluded.append(f"{r['variant'].upper()}: {r[f]} {f}")
-        lines.append(f"{label} & {a['expected']} & {a['valid']} & {b['valid']} & {crit} & "
+        lines.append(f"{label} & {a['expected']} & {a['valid']} & {b['valid']} & "
                      f"{'; '.join(excluded) or '--'} \\\\")
-    return ("\\begin{tabular}{@{}p{3.6cm}rrrrrp{3.4cm}@{}}\n\\toprule\n"
+    # Validity only: the functional outcome of each configuration is reported in the tables that follow.
+    return ("\\begin{tabular}{@{}" + col("5.2cm") + "rrr" + col("4.6cm") + "@{}}\n\\toprule\n"
             "\\textbf{Configuration} & \\textbf{Planned} & \\multicolumn{2}{c}{\\textbf{Valid runs}} & "
-            "\\multicolumn{2}{c}{\\textbf{Criteria met}} & \\textbf{Not counted} \\\\\n"
-            " & \\textbf{per variant} & \\textbf{A} & \\textbf{B} & \\textbf{A} & \\textbf{B} & \\\\\n\\midrule\n"
+            "\\textbf{Not counted} \\\\\n"
+            " & \\textbf{per variant} & \\textbf{A} & \\textbf{B} & \\\\\n\\midrule\n"
             + "\n".join(lines) + "\n\\bottomrule\n\\end{tabular}\n")
 
 
@@ -300,25 +311,33 @@ def tex_binary(rows):
         used = r["pairs_used"] + ("" if r["pairs_used"] == r["pairs_expected"] else f" of {r['pairs_expected']}")
         lines.append(f"{LABEL[r['config']]} & {r['outcome']} & {used} & {r['a_k']}/{r['a_n']} & "
                      f"{r['b_k']}/{r['b_n']} & {r['a_only']} & {r['b_only']} & {pval(r['p_two_sided'])} \\\\")
-    return ("\\begin{tabular}{@{}p{3.2cm}p{3.6cm}rrrrrr@{}}\n\\toprule\n"
+    return ("\\begin{tabular}{@{}" + col("2.9cm") + col("3.3cm") + "rrrrrr@{}}\n\\toprule\n"
             "\\textbf{Configuration} & \\textbf{Primary outcome} & \\textbf{Pairs} & \\textbf{A} & \\textbf{B} & "
-            "\\textbf{A only} & \\textbf{B only} & \\textbf{Exact $p$} \\\\\n\\midrule\n"
+            + two_lines("A", "only", "r") + " & " + two_lines("B", "only", "r") + " & "
+            + two_lines("Exact", "$p$", "r") + " \\\\\n\\midrule\n"
             + "\n".join(lines) + "\n\\bottomrule\n\\end{tabular}\n")
 
 
 def tex_wilcoxon(rows):
+    # The column of pairs is not printed: the caption of the thesis states that every comparison uses ten
+    # complete pairs, with no excluded pair and no zero difference. Any other value stops the generator.
+    pairs = {(r["pairs_used"], r["pairs_excluded"], r["zeros"]) for r in rows}
+    if pairs != {PAIRED_AS_STATED}:
+        raise ValueError(f"paired comparisons differ from the (pairs, excluded, zeros) stated in the caption "
+                         f"{PAIRED_AS_STATED}: {sorted(pairs)}")
     lines = []
     for r in rows:
         digits = 1 if r["unit"] == "s" else 2
         what = (f"{r['measure']} (s)" if r["config"] == "ttr"
-                else f"$N={r['n_robots']}$, {r['level']}: {r['measure']}")
+                else f"$N={r['n_robots']}$, {r['measure']}")
         mark = "" if r["is_ci95"] == "True" else "\\textsuperscript{*}"
-        lines.append(f"{what} & {r['pairs_used']} & {num(r['median_a'], digits)} & {num(r['median_b'], digits)} & "
+        lines.append(f"{what} & {num(r['median_a'], digits)} & {num(r['median_b'], digits)} & "
                      f"{num(r['pseudomedian'], digits)} [{num(r['low'], digits)}, {num(r['high'], digits)}]{mark} & "
                      f"{pval(r['p_two_sided'])} & {pval(r['p_holm'])} \\\\")
-    return ("\\begin{tabular}{@{}p{5.0cm}rrrlrr@{}}\n\\toprule\n"
-            "\\textbf{Measure} & \\textbf{Pairs} & \\textbf{Median A} & \\textbf{Median B} & "
-            "\\textbf{B$-$A, 95\\% interval} & \\textbf{Exact $p$} & \\textbf{Holm $p$} \\\\\n\\midrule\n"
+    return ("\\begin{tabular}{@{}" + col("4.6cm") + "rrlrr@{}}\n\\toprule\n"
+            "\\textbf{Measure} & " + two_lines("Median", "A", "r") + " & "
+            + two_lines("Median", "B", "r") + " & " + two_lines("B$-$A,", "95\\% interval", "l") + " & "
+            + two_lines("Exact", "$p$", "r") + " & " + two_lines("Holm", "$p$", "r") + " \\\\\n\\midrule\n"
             + "\n".join(lines) + "\n\\bottomrule\n\\end{tabular}\n")
 
 
@@ -343,7 +362,7 @@ def tex_durations(rows):
     lines = []
     for (key, quantity), per in by.items():
         lines.append(f"{LABEL[key]} & {quantity} ({shown(per['a'])[0]}) & {cell(per['a'])} & {cell(per['b'])} \\\\")
-    return ("\\begin{tabular}{@{}p{2.6cm}p{3.8cm}p{4.0cm}p{4.0cm}@{}}\n\\toprule\n"
+    return ("\\begin{tabular}{@{}" + col("2.5cm") + col("3.5cm") + col("3.8cm") + col("3.8cm") + "@{}}\n\\toprule\n"
             "\\textbf{Configuration} & \\textbf{Quantity} & \\textbf{A: median (min--max)} & "
             "\\textbf{B: median (min--max)} \\\\\n\\midrule\n"
             + "\n".join(lines) + "\n\\bottomrule\n\\end{tabular}\n")
