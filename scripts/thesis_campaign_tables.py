@@ -47,7 +47,7 @@ DURATIONS = [  # configuration, path in the configuration, quantity, unit of the
     ("p2", ("convergence_time_ms",), "Observed duration", "ms", "describe"),
     ("e4", ("convergence_time_ms",), "Observed duration", "ms", "describe"),
     ("u1", ("convergence_time_ms",), "Observed duration", "ms", "describe"),
-    ("u1", ("reconciliation_churn_u1u2",), "Reconciliation churn", "count", "describe"),
+    ("u1", ("reconciliation_churn_u1u2",), "Reported reconciliation churn", "count", "describe"),
     ("u2", ("convergence_time_ms",), "Observed duration", "ms", "describe"),
     ("s1-delete", ("block", "per_variant"), "Readiness restored", "s", "s1-readiness"),
     ("s1-delete", ("block", "per_variant"), "Service available", "s", "s1-service"),
